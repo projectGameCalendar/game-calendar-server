@@ -20,6 +20,12 @@ ProjectGC는 Kotlin과 Spring Boot로 구축한 게임 출시 캘린더 웹 서�
 - 별도 환경 구성이 필요하면 `application-<profile>.properties` 파일을 추가하고 `--spring.profiles.active=<profile>`로 실행하세요.
 
 
+## 디렉터리 구조
+- `src/main/kotlin/com/projectgc/calendar` — 웹 API와 직접 연결된 도메인(컨트롤러, 서비스, 영속성 등)
+- `src/main/kotlin/com/projectgc/batch` — 배치/예약 작업용 컴포넌트(향후 분리 대비)
+- `src/main/resources/db/migration` — Flyway 마이그레이션 스크립트 보관 위치
+
+
 ## 개발 준비
 1. JDK 21을 설치합니다 (Temurin 권장).
 2. 저장소를 클론한 뒤 IntelliJ IDEA 등 Kotlin/Spring 지원 IDE에서 Gradle 프로젝트로 임포트합니다.
@@ -33,12 +39,18 @@ ProjectGC는 Kotlin과 Spring Boot로 구축한 게임 출시 캘린더 웹 서�
 - 애플리케이션 실행: `./gradlew bootRun`
 
 `bootRun` 실행 후에는 다음과 같이 동작합니다.
-- http://localhost:8080/h2-console 에서 H2 웹 콘솔을 사용할 수 있습니다.<br>H2 웹 콘솔 접속 오류 발생시 설정 확인 후 아래와 같이 설정해주세요.
+- `http://localhost:8080/h2-console` 에서 H2 웹 콘솔을 사용할 수 있습니다.
   - JDBC URL: `jdbc:h2:mem:projectgc;MODE=PostgreSQL;DB_CLOSE_DELAY=-1`
-  - 사용자명: `sa`
-  - 비밀번호: 공백
+  - 사용자명: `sa`, 비밀번호: 공백
 - Flyway가 `db/migration` 폴더에 있는 마이그레이션을 자동으로 적용합니다.
 - 인메모리 DB 특성상 애플리케이션을 재기동하면 데이터가 초기화됩니다.
+
+
+## API 스켈레톤
+- `GET /api/releases/upcoming` — 출시 예정 목록 (서비스 로직 구현 예정)
+- `GET /api/releases/recent` — 최근 출시 목록 (서비스 로직 구현 예정)
+
+현재 두 엔드포인트는 서비스 계층에서 `NotImplementedError`를 던지도록 되어 있으므로 실제 데이터는 응답하지 않습니다.
 
 
 ## 문제 해결 가이드
