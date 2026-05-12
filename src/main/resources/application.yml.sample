@@ -38,4 +38,4 @@ igdb:
 
 batch:
   sync:
-    cron: "0 0 3 * * TUE"  # 매주 화요일 새벽 3시
+    cron: "0 0 3 * * TUE,SAT"  # 매주 화요일 새벽 3시

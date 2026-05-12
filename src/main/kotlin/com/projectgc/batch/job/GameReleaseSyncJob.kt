@@ -12,7 +12,7 @@ class GameReleaseSyncJob(
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
-    @Scheduled(cron = "\${batch.sync.cron}")
+    @Scheduled(cron = "\${batch.sync.cron}", zone = "Asia/Seoul")
     fun runNightlySync() {
         try {
             log.info("야간 IGDB 동기화 잡 시작")
