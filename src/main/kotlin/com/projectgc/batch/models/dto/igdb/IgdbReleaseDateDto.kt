@@ -8,7 +8,7 @@ data class IgdbReleaseDateDto(
     val id: Long,
     val game: Long,
     val platform: Long?,
-    val region: Long?,   // ingest.release_date.release_region 에 저장 (컬럼명 주의)
+    val releaseRegion: Long?,
     val status: Long?,
     val date: Long?,
     val y: Int?,
