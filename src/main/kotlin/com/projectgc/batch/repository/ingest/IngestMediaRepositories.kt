@@ -1,10 +1,10 @@
 package com.projectgc.batch.repository.ingest
 
-import com.projectgc.batch.models.entity.ingest.IngestArtworkEntity
-import com.projectgc.batch.models.entity.ingest.IngestScreenshotEntity
-import com.projectgc.batch.models.entity.ingest.IngestGameVideoEntity
-import com.projectgc.batch.models.entity.ingest.IngestWebsiteEntity
-import com.projectgc.batch.models.entity.ingest.IngestAlternativeNameEntity
+import com.projectgc.batch.model.entity.ingest.IngestArtworkEntity
+import com.projectgc.batch.model.entity.ingest.IngestScreenshotEntity
+import com.projectgc.batch.model.entity.ingest.IngestGameVideoEntity
+import com.projectgc.batch.model.entity.ingest.IngestWebsiteEntity
+import com.projectgc.batch.model.entity.ingest.IngestAlternativeNameEntity
 import org.springframework.data.jpa.repository.JpaRepository
 
 interface IngestArtworkRepository : JpaRepository<IngestArtworkEntity, Long>
