@@ -2,7 +2,7 @@ package com.projectgc.batch.client
 
 import com.fasterxml.jackson.databind.ObjectMapper
 import com.projectgc.batch.config.IgdbProperties
-import com.projectgc.batch.models.dto.igdb.*
+import com.projectgc.batch.model.dto.igdb.*
 import org.slf4j.LoggerFactory
 import org.springframework.core.ParameterizedTypeReference
 import org.springframework.http.MediaType

@@ -2,7 +2,7 @@ package com.projectgc.batch.service
 
 import com.projectgc.batch.client.FetchResult
 import com.projectgc.batch.client.IgdbClient
-import com.projectgc.batch.models.entity.ingest.IngestSyncCursorEntity
+import com.projectgc.batch.model.entity.ingest.IngestSyncCursorEntity
 import com.projectgc.batch.repository.ingest.IngestGameRepository
 import com.projectgc.batch.repository.ingest.IngestInvolvedCompanyRepository
 import com.projectgc.batch.repository.ingest.IngestJdbcRepository

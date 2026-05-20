@@ -1,4 +1,4 @@
-package com.projectgc.batch.models.entity.ingest
+package com.projectgc.batch.model.entity.ingest
 
 import jakarta.persistence.Entity
 import jakarta.persistence.Id

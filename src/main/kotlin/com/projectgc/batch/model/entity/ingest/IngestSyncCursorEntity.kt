@@ -1,4 +1,4 @@
-package com.projectgc.batch.models.entity.ingest
+package com.projectgc.batch.model.entity.ingest
 
 import jakarta.persistence.Column
 import jakarta.persistence.Entity

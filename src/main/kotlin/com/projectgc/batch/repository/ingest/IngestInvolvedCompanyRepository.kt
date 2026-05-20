@@ -1,6 +1,6 @@
 package com.projectgc.batch.repository.ingest
 
-import com.projectgc.batch.models.entity.ingest.IngestInvolvedCompanyEntity
+import com.projectgc.batch.model.entity.ingest.IngestInvolvedCompanyEntity
 import org.springframework.data.jpa.repository.JpaRepository
 import org.springframework.data.jpa.repository.Query
 

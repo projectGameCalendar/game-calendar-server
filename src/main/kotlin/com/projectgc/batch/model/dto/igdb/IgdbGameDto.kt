@@ -1,4 +1,4 @@
-package com.projectgc.batch.models.dto.igdb
+package com.projectgc.batch.model.dto.igdb
 
 import com.fasterxml.jackson.databind.PropertyNamingStrategies
 import com.fasterxml.jackson.databind.annotation.JsonNaming

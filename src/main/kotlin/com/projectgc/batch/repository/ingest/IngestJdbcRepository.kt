@@ -1,6 +1,6 @@
 package com.projectgc.batch.repository.ingest
 
-import com.projectgc.batch.models.entity.ingest.*
+import com.projectgc.batch.model.entity.ingest.*
 import com.projectgc.batch.service.TableSyncStats
 import org.postgresql.util.PGobject
 import org.springframework.jdbc.core.JdbcTemplate

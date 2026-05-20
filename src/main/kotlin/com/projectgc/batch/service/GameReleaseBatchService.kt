@@ -3,8 +3,8 @@ package com.projectgc.batch.service
 import com.projectgc.batch.client.FetchResult
 import com.projectgc.batch.client.IgdbClient
 import com.projectgc.batch.client.IgdbClient.Companion.PAGE_SIZE
-import com.projectgc.batch.models.entity.ingest.IngestSyncCursorEntity
-import com.projectgc.batch.models.mapper.*
+import com.projectgc.batch.model.entity.ingest.IngestSyncCursorEntity
+import com.projectgc.batch.model.mapper.*
 import com.projectgc.batch.repository.ingest.IngestRepositories
 import com.projectgc.shared.event.IngestSyncSucceededEvent
 import org.slf4j.LoggerFactory

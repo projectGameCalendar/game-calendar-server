@@ -1,17 +1,16 @@
-package com.projectgc.batch.models.dto.igdb
+package com.projectgc.batch.model.dto.igdb
 
 import com.fasterxml.jackson.databind.PropertyNamingStrategies
 import com.fasterxml.jackson.databind.annotation.JsonNaming
 
 @JsonNaming(PropertyNamingStrategies.SnakeCaseStrategy::class)
-data class IgdbInvolvedCompanyDto(
+data class IgdbCompanyDto(
     val id: Long,
-    val game: Long,
-    val company: Long,
-    val developer: Boolean?,
-    val publisher: Boolean?,
-    val porting: Boolean?,
-    val supporting: Boolean?,
+    val name: String?,
+    val parent: Long?,
+    val changedCompanyId: Long?,
+    val developed: List<Long>?,
+    val published: List<Long>?,
     val checksum: String?,
     val updatedAt: Long?,
 )

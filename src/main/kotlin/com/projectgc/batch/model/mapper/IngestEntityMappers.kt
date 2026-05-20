@@ -1,7 +1,7 @@
-package com.projectgc.batch.models.mapper
+package com.projectgc.batch.model.mapper
 
-import com.projectgc.batch.models.dto.igdb.*
-import com.projectgc.batch.models.entity.ingest.*
+import com.projectgc.batch.model.dto.igdb.*
+import com.projectgc.batch.model.entity.ingest.*
 import org.slf4j.LoggerFactory
 import java.util.UUID
 

@@ -2,7 +2,7 @@ package com.projectgc.batch.service
 
 import com.projectgc.batch.client.IgdbClient
 import com.projectgc.batch.client.IgdbClient.Companion.PAGE_SIZE
-import com.projectgc.batch.models.mapper.*
+import com.projectgc.batch.model.mapper.*
 import com.projectgc.batch.repository.ingest.IngestRepositories
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
