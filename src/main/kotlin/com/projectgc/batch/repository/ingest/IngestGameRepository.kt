@@ -1,6 +1,6 @@
 package com.projectgc.batch.repository.ingest
 
-import com.projectgc.batch.models.entity.ingest.IngestGameEntity
+import com.projectgc.batch.model.entity.ingest.IngestGameEntity
 import org.springframework.data.domain.Pageable
 import org.springframework.data.domain.Slice
 import org.springframework.data.jpa.repository.JpaRepository

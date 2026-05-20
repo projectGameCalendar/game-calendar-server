@@ -1,7 +1,7 @@
-package com.projectgc.batch.models.mapper
+package com.projectgc.batch.model.mapper
 
-import com.projectgc.batch.models.dto.igdb.*
-import com.projectgc.batch.models.entity.ingest.*
+import com.projectgc.batch.model.dto.igdb.*
+import com.projectgc.batch.model.entity.ingest.*
 import org.slf4j.LoggerFactory
 import java.util.UUID
 
@@ -57,7 +57,7 @@ fun IgdbReleaseDateDto.toEntity() = IngestReleaseDateEntity().also {
     it.id = id
     it.game = game
     it.platform = platform
-    it.releaseRegion = region   // DTO: region → Entity: releaseRegion (컬럼명: release_region)
+    it.releaseRegion = releaseRegion
     it.status = status
     it.date = date
     it.y = y
