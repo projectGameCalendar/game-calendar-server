@@ -61,26 +61,26 @@ class AffectedGameIdCalculator(
     }
 
     fun prepare(@Suppress("UNUSED_PARAMETER") syncStartedAt: Long): PreparedAffectedGameIdInputs {
-        val allGameIds = ingestEtlReadJdbcRepository.findAllIngestGameIds().toSet()
+        val allGameIds = ingestEtlReadJdbcRepository.findServiceCandidateGameIds().toSet()
         return PreparedAffectedGameIdInputs(
             allGameIds = allGameIds,
-            gameRows = ingestEtlReadJdbcRepository.loadAllGameProjectionRows(),
-            gameReleaseRows = ingestEtlReadJdbcRepository.loadAllGameReleaseProjectionRows(),
-            gameLocalizationRows = ingestEtlReadJdbcRepository.loadAllGameLocalizationProjectionRows(),
-            gameLanguageRows = ingestEtlReadJdbcRepository.loadAllGameLanguageProjectionRows(),
-            gameGenreRows = ingestEtlReadJdbcRepository.loadAllGameArrayProjectionRows("genres"),
-            gameThemeRows = ingestEtlReadJdbcRepository.loadAllGameArrayProjectionRows("themes"),
-            gamePlayerPerspectiveRows = ingestEtlReadJdbcRepository.loadAllGameArrayProjectionRows("player_perspectives"),
-            gameModeRows = ingestEtlReadJdbcRepository.loadAllGameArrayProjectionRows("game_modes"),
-            gameKeywordRows = ingestEtlReadJdbcRepository.loadAllGameArrayProjectionRows("keywords"),
-            gameCompanyRows = ingestEtlReadJdbcRepository.loadAllGameCompanyProjectionRows(),
-            gameRelationRows = ingestEtlReadJdbcRepository.loadAllGameRelationProjectionRows(),
-            coverRows = ingestEtlReadJdbcRepository.loadAllCoverProjectionRows(),
-            artworkRows = ingestEtlReadJdbcRepository.loadAllArtworkProjectionRows(),
-            screenshotRows = ingestEtlReadJdbcRepository.loadAllScreenshotProjectionRows(),
-            gameVideoRows = ingestEtlReadJdbcRepository.loadAllGameVideoProjectionRows(),
-            websiteRows = ingestEtlReadJdbcRepository.loadAllWebsiteProjectionRows(),
-            alternativeNameRows = ingestEtlReadJdbcRepository.loadAllAlternativeNameProjectionRows(),
+            gameRows = ingestEtlReadJdbcRepository.loadGameProjectionRows(allGameIds),
+            gameReleaseRows = ingestEtlReadJdbcRepository.loadServiceGameReleaseProjectionRows(allGameIds),
+            gameLocalizationRows = ingestEtlReadJdbcRepository.loadServiceGameLocalizationProjectionRows(allGameIds),
+            gameLanguageRows = ingestEtlReadJdbcRepository.loadServiceGameLanguageProjectionRows(allGameIds),
+            gameGenreRows = ingestEtlReadJdbcRepository.loadGameArrayProjectionRows(allGameIds, "genres"),
+            gameThemeRows = emptyList(),
+            gamePlayerPerspectiveRows = emptyList(),
+            gameModeRows = emptyList(),
+            gameKeywordRows = emptyList(),
+            gameCompanyRows = ingestEtlReadJdbcRepository.loadServiceGameCompanyProjectionRows(allGameIds),
+            gameRelationRows = emptyList(),
+            coverRows = ingestEtlReadJdbcRepository.loadCoverProjectionRows(allGameIds),
+            artworkRows = emptyList(),
+            screenshotRows = emptyList(),
+            gameVideoRows = ingestEtlReadJdbcRepository.loadServiceGameVideoProjectionRows(allGameIds),
+            websiteRows = ingestEtlReadJdbcRepository.loadServiceWebsiteProjectionRows(allGameIds),
+            alternativeNameRows = emptyList(),
         )
     }
 

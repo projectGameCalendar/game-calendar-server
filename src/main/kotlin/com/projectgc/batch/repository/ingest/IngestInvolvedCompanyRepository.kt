@@ -6,6 +6,6 @@ import org.springframework.data.jpa.repository.Query
 
 interface IngestInvolvedCompanyRepository : JpaRepository<IngestInvolvedCompanyEntity, Long> {
 
-    @Query("SELECT DISTINCT ic.company FROM IngestInvolvedCompanyEntity ic")
+    @Query("SELECT DISTINCT ic.companyId FROM IngestInvolvedCompanyEntity ic")
     fun findAllDistinctCompanyIds(): List<Long>
 }
