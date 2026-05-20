@@ -1,20 +1,28 @@
 package com.projectgc.batch.model.entity.ingest
 
+import jakarta.persistence.Column
 import jakarta.persistence.Entity
-import jakarta.persistence.Id
 import jakarta.persistence.Table
-import java.util.UUID
 
+/**
+ * ingest.game_localization 테이블 매핑 엔티티입니다.
+ */
 @Entity
-@Table(schema = "ingest", name = "game_localization")
-class IngestGameLocalizationEntity {
-    @Id
-    var id: Long = 0
+@Table(name = "game_localization", schema = "ingest")
+class IngestGameLocalizationEntity : IngestEntity() {
 
-    var game: Long = 0
-    var region: Long? = null
-    var name: String? = null
-    var cover: Long? = null
-    var checksum: UUID? = null
+    @Column(name = "name", nullable = false)
+    var name: String = ""
+
+    @Column(name = "game", nullable = false)
+    var gameId: Long = 0L
+
+    @Column(name = "region")
+    var regionId: Long? = null
+
+    @Column(name = "cover")
+    var coverId: Long? = null
+
+    @Column(name = "updated_at")
     var updatedAt: Long? = null
 }

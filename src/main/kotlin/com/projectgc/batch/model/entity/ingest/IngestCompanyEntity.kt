@@ -1,28 +1,35 @@
 package com.projectgc.batch.model.entity.ingest
 
+import jakarta.persistence.Column
 import jakarta.persistence.Entity
-import jakarta.persistence.Id
 import jakarta.persistence.Table
 import org.hibernate.annotations.JdbcTypeCode
 import org.hibernate.type.SqlTypes
-import java.util.UUID
 
+/**
+ * ingest.company 테이블 매핑 엔티티입니다.
+ */
 @Entity
-@Table(schema = "ingest", name = "company")
-class IngestCompanyEntity {
-    @Id
-    var id: Long = 0
+@Table(name = "company", schema = "ingest")
+class IngestCompanyEntity : IngestEntity() {
 
-    var name: String? = null
-    var parent: Long? = null
+    @Column(name = "name", nullable = false)
+    var name: String = ""
+
+    @Column(name = "parent")
+    var parentCompanyId: Long? = null
+
+    @Column(name = "changed_company_id")
     var changedCompanyId: Long? = null
 
     @JdbcTypeCode(SqlTypes.ARRAY)
-    var developed: Array<Long>? = null
+    @Column(name = "developed", columnDefinition = "bigint[]")
+    var developedGameIds: List<Long>? = null
 
     @JdbcTypeCode(SqlTypes.ARRAY)
-    var published: Array<Long>? = null
+    @Column(name = "published", columnDefinition = "bigint[]")
+    var publishedGameIds: List<Long>? = null
 
-    var checksum: UUID? = null
+    @Column(name = "updated_at")
     var updatedAt: Long? = null
 }

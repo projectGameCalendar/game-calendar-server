@@ -1,21 +1,31 @@
 package com.projectgc.batch.model.entity.ingest
 
+import jakarta.persistence.Column
 import jakarta.persistence.Entity
-import jakarta.persistence.Id
 import jakarta.persistence.Table
-import java.util.UUID
 
+/**
+ * ingest.platform 테이블 매핑 엔티티입니다.
+ */
 @Entity
-@Table(schema = "ingest", name = "platform")
-class IngestPlatformEntity {
-    @Id
-    var id: Long = 0
+@Table(name = "platform", schema = "ingest")
+class IngestPlatformEntity : IngestEntity() {
 
-    var name: String? = null
+    @Column(name = "name", nullable = false)
+    var name: String = ""
+
+    @Column(name = "abbreviation")
     var abbreviation: String? = null
+
+    @Column(name = "alternative_name")
     var alternativeName: String? = null
-    var platformLogo: Long? = null
-    var platformType: Long? = null
-    var checksum: UUID? = null
+
+    @Column(name = "platform_logo")
+    var platformLogoId: Long? = null
+
+    @Column(name = "platform_type")
+    var platformTypeId: Long? = null
+
+    @Column(name = "updated_at")
     var updatedAt: Long? = null
 }

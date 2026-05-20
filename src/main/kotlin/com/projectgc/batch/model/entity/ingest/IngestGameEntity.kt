@@ -1,94 +1,129 @@
 package com.projectgc.batch.model.entity.ingest
 
+import jakarta.persistence.Column
 import jakarta.persistence.Entity
-import jakarta.persistence.Id
 import jakarta.persistence.Table
 import org.hibernate.annotations.JdbcTypeCode
 import org.hibernate.type.SqlTypes
-import java.util.UUID
 
+/**
+ * ingest.game 테이블 매핑 엔티티입니다.
+ */
 @Entity
-@Table(schema = "ingest", name = "game")
-class IngestGameEntity {
-    @Id
-    var id: Long = 0
+@Table(name = "game", schema = "ingest")
+class IngestGameEntity : IngestEntity() {
 
-    var name: String? = null
-    var slug: String? = null
-    var summary: String? = null
-    var storyline: String? = null
+    @Column(name = "name", nullable = false)
+    var name: String = ""
+
+    @JdbcTypeCode(SqlTypes.ARRAY)
+    @Column(name = "alternative_names", columnDefinition = "bigint[]")
+    var alternativeNameIds: List<Long>? = null
+
+    @JdbcTypeCode(SqlTypes.ARRAY)
+    @Column(name = "game_localizations", columnDefinition = "bigint[]")
+    var gameLocalizationIds: List<Long>? = null
+
+    @Column(name = "slug", nullable = false)
+    var slug: String = ""
+
+    @Column(name = "first_release_date")
     var firstReleaseDate: Long? = null
 
     @JdbcTypeCode(SqlTypes.ARRAY)
-    var releaseDates: Array<Long>? = null
+    @Column(name = "release_dates", columnDefinition = "bigint[]")
+    var releaseDateIds: List<Long>? = null
 
     @JdbcTypeCode(SqlTypes.ARRAY)
-    var platforms: Array<Long>? = null
+    @Column(name = "platforms", columnDefinition = "bigint[]")
+    var platformIds: List<Long>? = null
 
-    var gameStatus: Long? = null
-    var gameType: Long? = null
+    @Column(name = "game_status")
+    var gameStatusId: Long? = null
 
-    @JdbcTypeCode(SqlTypes.ARRAY)
-    var languageSupports: Array<Long>? = null
-
-    @JdbcTypeCode(SqlTypes.ARRAY)
-    var genres: Array<Long>? = null
+    @Column(name = "game_type")
+    var gameTypeId: Long? = null
 
     @JdbcTypeCode(SqlTypes.ARRAY)
-    var themes: Array<Long>? = null
+    @Column(name = "language_supports", columnDefinition = "bigint[]")
+    var languageSupportIds: List<Long>? = null
+
+    @Column(name = "summary")
+    var summary: String? = null
+
+    @Column(name = "storyline")
+    var storyline: String? = null
 
     @JdbcTypeCode(SqlTypes.ARRAY)
-    var playerPerspectives: Array<Long>? = null
+    @Column(name = "genres", columnDefinition = "bigint[]")
+    var genreIds: List<Long>? = null
 
     @JdbcTypeCode(SqlTypes.ARRAY)
-    var gameModes: Array<Long>? = null
+    @Column(name = "themes", columnDefinition = "bigint[]")
+    var themeIds: List<Long>? = null
 
     @JdbcTypeCode(SqlTypes.ARRAY)
-    var keywords: Array<Long>? = null
+    @Column(name = "player_perspectives", columnDefinition = "bigint[]")
+    var playerPerspectiveIds: List<Long>? = null
 
     @JdbcTypeCode(SqlTypes.ARRAY)
-    var involvedCompanies: Array<Long>? = null
-
-    var parentGame: Long? = null
-
-    @JdbcTypeCode(SqlTypes.ARRAY)
-    var remakes: Array<Long>? = null
+    @Column(name = "game_modes", columnDefinition = "bigint[]")
+    var gameModeIds: List<Long>? = null
 
     @JdbcTypeCode(SqlTypes.ARRAY)
-    var remasters: Array<Long>? = null
+    @Column(name = "keywords", columnDefinition = "bigint[]")
+    var keywordIds: List<Long>? = null
 
     @JdbcTypeCode(SqlTypes.ARRAY)
-    var ports: Array<Long>? = null
+    @Column(name = "involved_companies", columnDefinition = "bigint[]")
+    var involvedCompanyIds: List<Long>? = null
+
+    @Column(name = "parent_game")
+    var parentGameId: Long? = null
 
     @JdbcTypeCode(SqlTypes.ARRAY)
-    var standaloneExpansions: Array<Long>? = null
+    @Column(name = "remakes", columnDefinition = "bigint[]")
+    var remakeIds: List<Long>? = null
 
     @JdbcTypeCode(SqlTypes.ARRAY)
-    var similarGames: Array<Long>? = null
-
-    var cover: Long? = null
-
-    @JdbcTypeCode(SqlTypes.ARRAY)
-    var artworks: Array<Long>? = null
+    @Column(name = "remasters", columnDefinition = "bigint[]")
+    var remasterIds: List<Long>? = null
 
     @JdbcTypeCode(SqlTypes.ARRAY)
-    var screenshots: Array<Long>? = null
+    @Column(name = "ports", columnDefinition = "bigint[]")
+    var portIds: List<Long>? = null
 
     @JdbcTypeCode(SqlTypes.ARRAY)
-    var videos: Array<Long>? = null
+    @Column(name = "standalone_expansions", columnDefinition = "bigint[]")
+    var standaloneExpansionIds: List<Long>? = null
 
     @JdbcTypeCode(SqlTypes.ARRAY)
-    var websites: Array<Long>? = null
+    @Column(name = "similar_games", columnDefinition = "bigint[]")
+    var similarGameIds: List<Long>? = null
+
+    @Column(name = "cover")
+    var coverId: Long? = null
 
     @JdbcTypeCode(SqlTypes.ARRAY)
-    var alternativeNames: Array<Long>? = null
+    @Column(name = "artworks", columnDefinition = "bigint[]")
+    var artworkIds: List<Long>? = null
 
     @JdbcTypeCode(SqlTypes.ARRAY)
-    var gameLocalizations: Array<Long>? = null
+    @Column(name = "screenshots", columnDefinition = "bigint[]")
+    var screenshotIds: List<Long>? = null
 
     @JdbcTypeCode(SqlTypes.ARRAY)
-    var tags: Array<Long>? = null
+    @Column(name = "videos", columnDefinition = "bigint[]")
+    var videoIds: List<Long>? = null
 
-    var checksum: UUID? = null
+    @JdbcTypeCode(SqlTypes.ARRAY)
+    @Column(name = "websites", columnDefinition = "bigint[]")
+    var websiteIds: List<Long>? = null
+
+    @JdbcTypeCode(SqlTypes.ARRAY)
+    @Column(name = "tags", columnDefinition = "bigint[]")
+    var tagNumbers: List<Long>? = null
+
+    @Column(name = "updated_at")
     var updatedAt: Long? = null
 }
