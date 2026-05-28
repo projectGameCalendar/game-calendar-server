@@ -12,14 +12,25 @@ class IngestEtlReadJdbcRepository(
 ) {
     companion object {
         private const val PROJECTION_QUERY_CHUNK_SIZE = 500
+        private val SERVICE_RELEASE_REGION_IDS_SQL =
+            ServiceEtlDataScope.idList(ServiceEtlDataScope.serviceReleaseRegionIds)
+        private val SERVICE_PLATFORM_IDS_SQL =
+            ServiceEtlDataScope.idList(ServiceEtlDataScope.servicePlatformIds)
+        private val FIXED_LOCALIZATION_REGION_IDS_SQL =
+            ServiceEtlDataScope.idList(ServiceEtlDataScope.fixedLocalizationRegionIds)
+        private val FIXED_LANGUAGE_IDS_SQL =
+            ServiceEtlDataScope.idList(ServiceEtlDataScope.fixedLanguageIds)
     }
 
-    fun findAllIngestGameIds(): List<Long> =
+    fun findServiceCandidateGameIds(): List<Long> =
         jdbc.query(
             """
-            SELECT id
-            FROM ingest.game
-            ORDER BY id
+            SELECT DISTINCT g.id
+            FROM ingest.game g
+            JOIN ingest.release_date rd ON rd.game = g.id
+            WHERE ${serviceReleaseDatePredicate("rd")}
+              AND NULLIF(BTRIM(g.name), '') IS NOT NULL
+            ORDER BY g.id
             """.trimIndent(),
         ) { rs, _ -> rs.getLong("id") }
 
@@ -50,23 +61,26 @@ class IngestEtlReadJdbcRepository(
     fun findAffectedGameIdsFromGameUpdatedAt(cursorFrom: Long): Set<Long> =
         findAffectedGameIdsFromGames(cursorFrom)
 
-    fun loadGameStatuses(): List<NamedDimensionRow> =
-        loadNamedDimensionRows(
+    fun loadServiceGameStatuses(): List<NamedDimensionRow> =
+        loadNamedDimensionRowsByCandidateGameColumn(
             sourceTable = "game_status",
             sourceValueColumn = "status",
+            gameColumn = "game_status",
         )
 
-    fun loadGameTypes(): List<NamedDimensionRow> =
-        loadNamedDimensionRows(
+    fun loadServiceGameTypes(): List<NamedDimensionRow> =
+        loadNamedDimensionRowsByCandidateGameColumn(
             sourceTable = "game_type",
             sourceValueColumn = "type",
+            gameColumn = "game_type",
         )
 
-    fun loadLanguages(): List<LanguageRow> =
+    fun loadServiceLanguages(): List<LanguageRow> =
         jdbc.query(
             """
             SELECT id, locale, name, native_name
-            FROM ingest.language
+            FROM ingest.language l
+            WHERE ${serviceLanguagePredicate("l")}
             ORDER BY id
             """.trimIndent(),
         ) { rs, _ ->
@@ -78,11 +92,12 @@ class IngestEtlReadJdbcRepository(
             )
         }
 
-    fun loadRegions(): List<RegionRow> =
+    fun loadServiceRegions(): List<RegionRow> =
         jdbc.query(
             """
             SELECT id, name, identifier
-            FROM ingest.region
+            FROM ingest.region r
+            WHERE ${serviceLocalizationRegionPredicate("r")}
             ORDER BY id
             """.trimIndent(),
         ) { rs, _ ->
@@ -93,17 +108,33 @@ class IngestEtlReadJdbcRepository(
             )
         }
 
-    fun loadReleaseRegions(): List<NamedDimensionRow> =
-        loadNamedDimensionRows(
-            sourceTable = "release_date_region",
-            sourceValueColumn = "region",
-        )
+    fun loadServiceReleaseRegions(): List<NamedDimensionRow> =
+        jdbc.query(
+            """
+            SELECT id, region AS value
+            FROM ingest.release_date_region
+            WHERE id IN ($SERVICE_RELEASE_REGION_IDS_SQL)
+               OR LOWER(COALESCE(region, '')) IN ('worldwide', 'korea')
+            ORDER BY id
+            """.trimIndent(),
+        ) { rs, _ ->
+            NamedDimensionRow(
+                id = rs.getLong("id"),
+                value = rs.getString("value"),
+            )
+        }
 
-    fun loadReleaseStatuses(): List<ReleaseStatusRow> =
+    fun loadServiceReleaseStatuses(): List<ReleaseStatusRow> =
         jdbc.query(
             """
             SELECT id, name, description
             FROM ingest.release_date_status
+            WHERE id IN (
+                SELECT DISTINCT rd.status
+                FROM ingest.release_date rd
+                WHERE ${serviceReleaseDatePredicate("rd")}
+                  AND rd.status IS NOT NULL
+            )
             ORDER BY id
             """.trimIndent(),
         ) { rs, _ ->
@@ -114,75 +145,52 @@ class IngestEtlReadJdbcRepository(
             )
         }
 
-    fun loadGenres(): List<NamedDimensionRow> =
-        loadNamedDimensionRows(
+    fun loadServiceGenres(): List<NamedDimensionRow> =
+        loadNamedDimensionRowsByCandidateGameArray(
             sourceTable = "genre",
             sourceValueColumn = "name",
+            gameArrayColumn = "genres",
         )
 
-    fun loadThemes(): List<NamedDimensionRow> =
-        loadNamedDimensionRows(
-            sourceTable = "theme",
-            sourceValueColumn = "name",
-        )
-
-    fun loadPlayerPerspectives(): List<NamedDimensionRow> =
-        loadNamedDimensionRows(
-            sourceTable = "player_perspective",
-            sourceValueColumn = "name",
-        )
-
-    fun loadGameModes(): List<NamedDimensionRow> =
-        loadNamedDimensionRows(
-            sourceTable = "game_mode",
-            sourceValueColumn = "name",
-        )
-
-    fun loadKeywords(): List<NamedDimensionRow> =
-        loadNamedDimensionRows(
-            sourceTable = "keyword",
-            sourceValueColumn = "name",
-        )
-
-    fun loadLanguageSupportTypes(): List<NamedDimensionRow> =
-        loadNamedDimensionRows(
-            sourceTable = "language_support_type",
-            sourceValueColumn = "name",
-        )
-
-    fun loadWebsiteTypes(): List<NamedDimensionRow> =
-        loadNamedDimensionRows(
-            sourceTable = "website_type",
-            sourceValueColumn = "type",
-        )
-
-    fun loadPlatformLogos(): List<PlatformLogoRow> =
+    fun loadServiceWebsiteTypes(): List<NamedDimensionRow> =
         jdbc.query(
             """
-            SELECT id, image_id, url
-            FROM ingest.platform_logo
-            ORDER BY id
+            WITH candidate_games AS (
+                ${serviceCandidateGameIdsSql()}
+            ),
+            referenced AS (
+                SELECT DISTINCT w.type AS id
+                FROM ingest.website w
+                JOIN candidate_games cg ON cg.id = w.game
+                WHERE w.type IS NOT NULL
+                  AND COALESCE(w.trusted, FALSE) = TRUE
+                  AND NULLIF(BTRIM(w.url), '') IS NOT NULL
+            )
+            SELECT wt.id, wt.type AS value
+            FROM ingest.website_type wt
+            JOIN referenced r ON r.id = wt.id
+            ORDER BY wt.id
             """.trimIndent(),
         ) { rs, _ ->
-            PlatformLogoRow(
+            NamedDimensionRow(
                 id = rs.getLong("id"),
-                imageId = rs.getString("image_id"),
-                url = rs.getString("url"),
+                value = rs.getString("value"),
             )
         }
 
-    fun loadPlatformTypes(): List<NamedDimensionRow> =
-        loadNamedDimensionRows(
-            sourceTable = "platform_type",
-            sourceValueColumn = "name",
-        )
-
-    fun loadPlatforms(): List<PlatformSyncRow> =
+    fun loadServicePlatforms(): List<PlatformSyncRow> =
         jdbc.query(
             """
-            SELECT id, name, abbreviation, alternative_name, platform_logo, platform_type
-            FROM ingest.platform
-            ORDER BY id
+            WITH service_releases AS (
+                SELECT DISTINCT rd.platform AS id
+                FROM ingest.release_date rd
+                WHERE ${serviceReleaseDatePredicate("rd")}
+                  AND rd.platform IS NOT NULL
+            )
+            SELECT p.id, p.name, p.abbreviation, p.alternative_name, p.platform_logo, p.platform_type
+            FROM ingest.platform p
+            JOIN service_releases sr ON sr.id = p.id
+            ORDER BY p.id
             """.trimIndent(),
         ) { rs, _ ->
             PlatformSyncRow(
@@ -190,35 +198,37 @@ class IngestEtlReadJdbcRepository(
                 name = rs.getString("name"),
                 abbreviation = rs.getString("abbreviation"),
                 alternativeName = rs.getString("alternative_name"),
-                logoId = rs.getLong("platform_logo").takeIf { !rs.wasNull() },
-                typeId = rs.getLong("platform_type").takeIf { !rs.wasNull() },
+                logoId = null,
+                typeId = null,
             )
         }
 
-    fun loadCompanies(): List<CompanySyncRow> =
+    fun loadServiceCompanies(): List<CompanySyncRow> =
         jdbc.query(
             """
-            SELECT id, name, parent, changed_company_id
-            FROM ingest.company
-            ORDER BY id
+            WITH candidate_games AS (
+                ${serviceCandidateGameIdsSql()}
+            ),
+            referenced AS (
+                SELECT DISTINCT ic.company AS id
+                FROM ingest.involved_company ic
+                JOIN candidate_games cg ON cg.id = ic.game
+                WHERE ic.company IS NOT NULL
+                  AND COALESCE(ic.developer, FALSE) = TRUE
+            )
+            SELECT c.id, c.name, c.parent, c.changed_company_id
+            FROM ingest.company c
+            JOIN referenced r ON r.id = c.id
+            ORDER BY c.id
             """.trimIndent(),
         ) { rs, _ ->
             CompanySyncRow(
                 id = rs.getLong("id"),
                 name = rs.getString("name"),
-                parentCompanyId = rs.getLong("parent").takeIf { !rs.wasNull() },
-                mergedIntoCompanyId = rs.getLong("changed_company_id").takeIf { !rs.wasNull() },
+                parentCompanyId = null,
+                mergedIntoCompanyId = null,
             )
         }
-
-    fun loadAllGameProjectionRows(): List<GameProjectionRow> =
-        jdbc.query(
-            """
-            SELECT id, slug, name, summary, storyline, first_release_date, game_status, game_type, updated_at, tags
-            FROM ingest.game
-            ORDER BY id
-            """.trimIndent(),
-        ) { rs, _ -> rs.toGameProjectionRow() }
 
     fun loadGameProjectionRows(gameIds: Set<Long>): List<GameProjectionRow> =
         queryByLongIdChunks(
@@ -234,64 +244,41 @@ class IngestEtlReadJdbcRepository(
             rowMapper = { rs, _ -> rs.toGameProjectionRow() },
         )
 
-    fun loadAllGameLocalizationProjectionRows(): List<GameLocalizationProjectionRow> =
-        jdbc.query(
-            """
-            SELECT id, game, region, name
-            FROM ingest.game_localization
-            WHERE game IS NOT NULL
-            ORDER BY game, id
-            """.trimIndent(),
-        ) { rs, _ -> rs.toGameLocalizationProjectionRow() }
-
-    fun loadGameLocalizationProjectionRows(gameIds: Set<Long>): List<GameLocalizationProjectionRow> =
+    fun loadServiceGameLocalizationProjectionRows(gameIds: Set<Long>): List<GameLocalizationProjectionRow> =
         queryByLongIdChunks(
             ids = gameIds,
             sqlBuilder = { placeholders ->
                 """
-                SELECT id, game, region, name
-                FROM ingest.game_localization
-                WHERE game IN ($placeholders)
-                ORDER BY game, id
+                SELECT gl.id, gl.game, gl.region, gl.name
+                FROM ingest.game_localization gl
+                JOIN ingest.region r ON r.id = gl.region
+                WHERE gl.game IN ($placeholders)
+                  AND ${serviceLocalizationRegionPredicate("r")}
+                ORDER BY gl.game, gl.id
                 """.trimIndent()
             },
             rowMapper = { rs, _ -> rs.toGameLocalizationProjectionRow() },
         )
 
-    fun loadAllGameReleaseProjectionRows(): List<GameReleaseProjectionRow> =
-        jdbc.query(
-            """
-            SELECT id, game, platform, release_region, status, date, y, m, human
-            FROM ingest.release_date
-            WHERE game IS NOT NULL
-            ORDER BY game, id
-            """.trimIndent(),
-        ) { rs, _ -> rs.toGameReleaseProjectionRow() }
-
-    fun loadGameReleaseProjectionRows(gameIds: Set<Long>): List<GameReleaseProjectionRow> =
+    fun loadServiceGameReleaseProjectionRows(gameIds: Set<Long>): List<GameReleaseProjectionRow> =
         queryByLongIdChunks(
             ids = gameIds,
             sqlBuilder = { placeholders ->
                 """
-                SELECT id, game, platform, release_region, status, date, y, m, human
-                FROM ingest.release_date
-                WHERE game IN ($placeholders)
-                ORDER BY game, id
+                SELECT rd.id, rd.game, rd.platform, rd.release_region, rd.status, rd.date, rd.y, rd.m, rd.human
+                FROM ingest.release_date rd
+                WHERE rd.game IN ($placeholders)
+                  AND ${serviceReleaseDatePredicate("rd")}
+                ORDER BY rd.game, rd.id
                 """.trimIndent()
             },
             rowMapper = { rs, _ -> rs.toGameReleaseProjectionRow() },
         )
 
-    fun loadAllGameLanguageProjectionRows(): List<GameLanguageProjectionRow> =
-        loadGameLanguageProjectionRowsInternal(null)
-
-    fun loadGameLanguageProjectionRows(gameIds: Set<Long>): List<GameLanguageProjectionRow> =
-        loadGameLanguageProjectionRowsInternal(gameIds)
-
-    fun loadAllGameArrayProjectionRows(sourceColumn: String): List<GameDimensionProjectionRow> =
-        loadGameArrayProjectionRowsInternal(
-            gameIds = null,
-            sourceColumn = sourceColumn,
+    fun loadServiceGameLanguageProjectionRows(gameIds: Set<Long>): List<GameLanguageProjectionRow> =
+        loadGameLanguageProjectionRowsInternal(
+            gameIds = gameIds,
+            languageFilter = serviceLanguagePredicate("l"),
         )
 
     fun loadGameArrayProjectionRows(
@@ -303,63 +290,78 @@ class IngestEtlReadJdbcRepository(
             sourceColumn = sourceColumn,
         )
 
-    fun loadAllGameCompanyProjectionRows(): List<GameCompanyProjectionRow> =
-        loadGameCompanyProjectionRowsInternal(null)
-
-    fun loadGameCompanyProjectionRows(gameIds: Set<Long>): List<GameCompanyProjectionRow> =
-        loadGameCompanyProjectionRowsInternal(gameIds)
-
-    fun loadAllGameRelationProjectionRows(): List<GameRelationProjectionRow> =
-        loadGameRelationProjectionRowsInternal(null)
+    fun loadServiceGameCompanyProjectionRows(gameIds: Set<Long>): List<GameCompanyProjectionRow> =
+        loadGameCompanyProjectionRowsInternal(
+            gameIds = gameIds,
+            developerOnly = true,
+        )
 
     fun loadGameRelationProjectionRows(gameIds: Set<Long>): List<GameRelationProjectionRow> =
         loadGameRelationProjectionRowsInternal(gameIds)
 
-    fun loadAllCoverProjectionRows(): List<CoverProjectionRow> =
-        loadCoverProjectionRowsInternal(null)
-
     fun loadCoverProjectionRows(gameIds: Set<Long>): List<CoverProjectionRow> =
         loadCoverProjectionRowsInternal(gameIds)
 
-    fun loadAllArtworkProjectionRows(): List<ArtworkProjectionRow> =
-        loadArtworkProjectionRowsInternal(null)
+    fun loadServiceGameVideoProjectionRows(gameIds: Set<Long>): List<GameVideoProjectionRow> =
+        loadGameVideoProjectionRowsInternal(
+            gameIds = gameIds,
+            requireVideoId = true,
+        )
 
-    fun loadArtworkProjectionRows(gameIds: Set<Long>): List<ArtworkProjectionRow> =
-        loadArtworkProjectionRowsInternal(gameIds)
+    fun loadServiceWebsiteProjectionRows(gameIds: Set<Long>): List<WebsiteProjectionRow> =
+        loadWebsiteProjectionRowsInternal(
+            gameIds = gameIds,
+            trustedOnly = true,
+        )
 
-    fun loadAllScreenshotProjectionRows(): List<ScreenshotProjectionRow> =
-        loadScreenshotProjectionRowsInternal(null)
-
-    fun loadScreenshotProjectionRows(gameIds: Set<Long>): List<ScreenshotProjectionRow> =
-        loadScreenshotProjectionRowsInternal(gameIds)
-
-    fun loadAllGameVideoProjectionRows(): List<GameVideoProjectionRow> =
-        loadGameVideoProjectionRowsInternal(null)
-
-    fun loadGameVideoProjectionRows(gameIds: Set<Long>): List<GameVideoProjectionRow> =
-        loadGameVideoProjectionRowsInternal(gameIds)
-
-    fun loadAllWebsiteProjectionRows(): List<WebsiteProjectionRow> =
-        loadWebsiteProjectionRowsInternal(null)
-
-    fun loadWebsiteProjectionRows(gameIds: Set<Long>): List<WebsiteProjectionRow> =
-        loadWebsiteProjectionRowsInternal(gameIds)
-
-    fun loadAllAlternativeNameProjectionRows(): List<AlternativeNameProjectionRow> =
-        loadAlternativeNameProjectionRowsInternal(null)
-
-    fun loadAlternativeNameProjectionRows(gameIds: Set<Long>): List<AlternativeNameProjectionRow> =
-        loadAlternativeNameProjectionRowsInternal(gameIds)
-
-    private fun loadNamedDimensionRows(
+    private fun loadNamedDimensionRowsByCandidateGameColumn(
         sourceTable: String,
         sourceValueColumn: String,
+        gameColumn: String,
     ): List<NamedDimensionRow> =
         jdbc.query(
             """
-            SELECT id, $sourceValueColumn AS value
-            FROM ingest.$sourceTable
-            ORDER BY id
+            WITH candidate_games AS (
+                ${serviceCandidateGameIdsSql()}
+            ),
+            referenced AS (
+                SELECT DISTINCT g.$gameColumn AS id
+                FROM ingest.game g
+                JOIN candidate_games cg ON cg.id = g.id
+                WHERE g.$gameColumn IS NOT NULL
+            )
+            SELECT d.id, d.$sourceValueColumn AS value
+            FROM ingest.$sourceTable d
+            JOIN referenced r ON r.id = d.id
+            ORDER BY d.id
+            """.trimIndent(),
+        ) { rs, _ ->
+            NamedDimensionRow(
+                id = rs.getLong("id"),
+                value = rs.getString("value"),
+            )
+        }
+
+    private fun loadNamedDimensionRowsByCandidateGameArray(
+        sourceTable: String,
+        sourceValueColumn: String,
+        gameArrayColumn: String,
+    ): List<NamedDimensionRow> =
+        jdbc.query(
+            """
+            WITH candidate_games AS (
+                ${serviceCandidateGameIdsSql()}
+            ),
+            referenced AS (
+                SELECT DISTINCT ref.dimension_id AS id
+                FROM ingest.game g
+                JOIN candidate_games cg ON cg.id = g.id
+                CROSS JOIN LATERAL unnest(COALESCE(g.$gameArrayColumn, ARRAY[]::BIGINT[])) AS ref(dimension_id)
+            )
+            SELECT d.id, d.$sourceValueColumn AS value
+            FROM ingest.$sourceTable d
+            JOIN referenced r ON r.id = d.id
+            ORDER BY d.id
             """.trimIndent(),
         ) { rs, _ ->
             NamedDimensionRow(
@@ -381,10 +383,14 @@ class IngestEtlReadJdbcRepository(
             cursorFrom,
         ).toCollection(linkedSetOf())
 
-    private fun loadGameLanguageProjectionRowsInternal(gameIds: Set<Long>?): List<GameLanguageProjectionRow> =
+    private fun loadGameLanguageProjectionRowsInternal(
+        gameIds: Set<Long>?,
+        languageFilter: String? = null,
+    ): List<GameLanguageProjectionRow> =
         queryByOptionalGameIds(
             gameIds = gameIds,
             sqlBuilder = { filterClause ->
+                val languageFilterClause = languageFilter?.let { "AND $it" }.orEmpty()
                 """
                 SELECT
                     ls.game AS game_id,
@@ -394,8 +400,10 @@ class IngestEtlReadJdbcRepository(
                     bool_or(lower(COALESCE(lst.name, '')) = 'interface') AS supports_interface
                 FROM ingest.language_support ls
                 LEFT JOIN ingest.language_support_type lst ON lst.id = ls.language_support_type
+                LEFT JOIN ingest.language l ON l.id = ls.language
                 WHERE ls.language IS NOT NULL
                   $filterClause
+                  $languageFilterClause
                 GROUP BY ls.game, ls.language
                 HAVING bool_or(lower(COALESCE(lst.name, '')) = 'audio')
                     OR bool_or(lower(COALESCE(lst.name, '')) IN ('subtitles', 'subtitle'))
@@ -444,10 +452,18 @@ class IngestEtlReadJdbcRepository(
             )
         }
 
-    private fun loadGameCompanyProjectionRowsInternal(gameIds: Set<Long>?): List<GameCompanyProjectionRow> =
+    private fun loadGameCompanyProjectionRowsInternal(
+        gameIds: Set<Long>?,
+        developerOnly: Boolean = false,
+    ): List<GameCompanyProjectionRow> =
         queryByOptionalGameIds(
             gameIds = gameIds,
             sqlBuilder = { filterClause ->
+                val developerFilterClause = if (developerOnly) {
+                    "AND COALESCE(ic.developer, FALSE) = TRUE"
+                } else {
+                    ""
+                }
                 """
                 SELECT
                     ic.game AS game_id,
@@ -459,6 +475,7 @@ class IngestEtlReadJdbcRepository(
                 FROM ingest.involved_company ic
                 WHERE ic.company IS NOT NULL
                   $filterClause
+                  $developerFilterClause
                 GROUP BY ic.game, ic.company
                 HAVING bool_or(COALESCE(ic.developer, FALSE))
                     OR bool_or(COALESCE(ic.publisher, FALSE))
@@ -583,75 +600,110 @@ class IngestEtlReadJdbcRepository(
             )
         }
 
-    private fun loadArtworkProjectionRowsInternal(gameIds: Set<Long>?): List<ArtworkProjectionRow> =
+    private fun loadGameVideoProjectionRowsInternal(
+        gameIds: Set<Long>?,
+        requireVideoId: Boolean = false,
+    ): List<GameVideoProjectionRow> =
         queryByOptionalGameIds(
             gameIds = gameIds,
             sqlBuilder = { filterClause ->
-                """
-                SELECT id, game AS game_id, image_id, url
-                FROM ingest.artwork
-                WHERE game IS NOT NULL
-                  $filterClause
-                ORDER BY game, id
-                """.trimIndent()
-            },
-        ) { rs, _ -> rs.toArtworkProjectionRow() }
-
-    private fun loadScreenshotProjectionRowsInternal(gameIds: Set<Long>?): List<ScreenshotProjectionRow> =
-        queryByOptionalGameIds(
-            gameIds = gameIds,
-            sqlBuilder = { filterClause ->
-                """
-                SELECT id, game AS game_id, image_id, url
-                FROM ingest.screenshot
-                WHERE game IS NOT NULL
-                  $filterClause
-                ORDER BY game, id
-                """.trimIndent()
-            },
-        ) { rs, _ -> rs.toScreenshotProjectionRow() }
-
-    private fun loadGameVideoProjectionRowsInternal(gameIds: Set<Long>?): List<GameVideoProjectionRow> =
-        queryByOptionalGameIds(
-            gameIds = gameIds,
-            sqlBuilder = { filterClause ->
+                val videoIdFilterClause = if (requireVideoId) {
+                    "AND NULLIF(BTRIM(video_id), '') IS NOT NULL"
+                } else {
+                    ""
+                }
                 """
                 SELECT id, game AS game_id, name, video_id
                 FROM ingest.game_video
                 WHERE game IS NOT NULL
                   $filterClause
+                  $videoIdFilterClause
                 ORDER BY game, id
                 """.trimIndent()
             },
         ) { rs, _ -> rs.toGameVideoProjectionRow() }
 
-    private fun loadWebsiteProjectionRowsInternal(gameIds: Set<Long>?): List<WebsiteProjectionRow> =
+    private fun loadWebsiteProjectionRowsInternal(
+        gameIds: Set<Long>?,
+        trustedOnly: Boolean = false,
+    ): List<WebsiteProjectionRow> =
         queryByOptionalGameIds(
             gameIds = gameIds,
             sqlBuilder = { filterClause ->
+                val trustedFilterClause = if (trustedOnly) {
+                    "AND COALESCE(trusted, FALSE) = TRUE AND NULLIF(BTRIM(url), '') IS NOT NULL"
+                } else {
+                    ""
+                }
                 """
                 SELECT id, game AS game_id, type AS type_id, url, COALESCE(trusted, FALSE) AS is_trusted
                 FROM ingest.website
                 WHERE game IS NOT NULL
                   $filterClause
+                  $trustedFilterClause
                 ORDER BY game, id
                 """.trimIndent()
             },
         ) { rs, _ -> rs.toWebsiteProjectionRow() }
 
-    private fun loadAlternativeNameProjectionRowsInternal(gameIds: Set<Long>?): List<AlternativeNameProjectionRow> =
-        queryByOptionalGameIds(
-            gameIds = gameIds,
-            sqlBuilder = { filterClause ->
-                """
-                SELECT id, game AS game_id, name, comment
-                FROM ingest.alternative_name
-                WHERE game IS NOT NULL
-                  $filterClause
-                ORDER BY game, id
-                """.trimIndent()
-            },
-        ) { rs, _ -> rs.toAlternativeNameProjectionRow() }
+    private fun serviceCandidateGameIdsSql(): String =
+        """
+        SELECT DISTINCT g.id
+        FROM ingest.game g
+        JOIN ingest.release_date rd ON rd.game = g.id
+        WHERE ${serviceReleaseDatePredicate("rd")}
+          AND NULLIF(BTRIM(g.name), '') IS NOT NULL
+        """.trimIndent()
+
+    private fun serviceReleaseDatePredicate(alias: String): String =
+        """
+        $alias.game IS NOT NULL
+          AND $alias.date IS NOT NULL
+          AND $alias.release_region IN ($SERVICE_RELEASE_REGION_IDS_SQL)
+          AND $alias.status IS DISTINCT FROM ${ServiceEtlDataScope.CANCELLED_RELEASE_STATUS_ID}
+          AND ($alias.platform IS NULL OR $alias.platform IN ($SERVICE_PLATFORM_IDS_SQL))
+          AND (
+              $alias.release_region = ${ServiceEtlDataScope.KOREA_RELEASE_REGION_ID}
+              OR NOT EXISTS (
+                  SELECT 1
+                  FROM ingest.release_date kr
+                  WHERE kr.game = $alias.game
+                    AND kr.platform IS NOT DISTINCT FROM $alias.platform
+                    AND kr.date IS NOT NULL
+                    AND kr.release_region = ${ServiceEtlDataScope.KOREA_RELEASE_REGION_ID}
+                    AND kr.status IS DISTINCT FROM ${ServiceEtlDataScope.CANCELLED_RELEASE_STATUS_ID}
+                    AND (kr.platform IS NULL OR kr.platform IN ($SERVICE_PLATFORM_IDS_SQL))
+              )
+          )
+        """.trimIndent()
+
+    private fun serviceLanguagePredicate(alias: String): String =
+        """
+        (
+            $alias.id IN ($FIXED_LANGUAGE_IDS_SQL)
+            OR LOWER(COALESCE($alias.locale, '')) LIKE 'ko%'
+            OR LOWER(COALESCE($alias.locale, '')) LIKE 'en%'
+            OR LOWER(COALESCE($alias.name, '')) IN ('korean', 'english')
+            OR LOWER(COALESCE($alias.native_name, '')) IN ('korean', 'english')
+        )
+        """.trimIndent()
+
+    private fun serviceLocalizationRegionPredicate(alias: String): String =
+        """
+        (
+            $alias.id IN ($FIXED_LOCALIZATION_REGION_IDS_SQL)
+            OR LOWER(COALESCE($alias.identifier, '')) LIKE 'ko%'
+            OR LOWER(COALESCE($alias.identifier, '')) LIKE 'en%'
+            OR LOWER(COALESCE($alias.name, '')) IN (
+                'korea',
+                'south korea',
+                'korean',
+                'english',
+                'united states',
+                'united kingdom'
+            )
+        )
+        """.trimIndent()
 
     private fun ResultSet.toGameProjectionRow() =
         GameProjectionRow(
@@ -698,22 +750,6 @@ class IngestEtlReadJdbcRepository(
             isMain = getBoolean("is_main"),
         )
 
-    private fun ResultSet.toArtworkProjectionRow() =
-        ArtworkProjectionRow(
-            id = getLong("id"),
-            gameId = getLong("game_id"),
-            imageId = getString("image_id"),
-            url = getString("url"),
-        )
-
-    private fun ResultSet.toScreenshotProjectionRow() =
-        ScreenshotProjectionRow(
-            id = getLong("id"),
-            gameId = getLong("game_id"),
-            imageId = getString("image_id"),
-            url = getString("url"),
-        )
-
     private fun ResultSet.toGameVideoProjectionRow() =
         GameVideoProjectionRow(
             id = getLong("id"),
@@ -729,14 +765,6 @@ class IngestEtlReadJdbcRepository(
             typeId = getLong("type_id").takeIf { !wasNull() },
             url = getString("url"),
             isTrusted = getBoolean("is_trusted"),
-        )
-
-    private fun ResultSet.toAlternativeNameProjectionRow() =
-        AlternativeNameProjectionRow(
-            id = getLong("id"),
-            gameId = getLong("game_id"),
-            name = getString("name"),
-            comment = getString("comment"),
         )
 
     private fun <T> queryByOptionalGameIds(

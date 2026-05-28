@@ -1,6 +1,5 @@
 package com.projectgc.calendar.service.etl
 
-import com.projectgc.calendar.repository.etl.AlternativeNameProjectionRow
 import com.projectgc.calendar.repository.etl.ArtworkProjectionRow
 import com.projectgc.calendar.repository.etl.CoverProjectionRow
 import com.projectgc.calendar.repository.etl.GameCompanyProjectionRow
@@ -10,7 +9,6 @@ import com.projectgc.calendar.repository.etl.GameProjectionRow
 import com.projectgc.calendar.repository.etl.GameReleaseProjectionRow
 import com.projectgc.calendar.repository.etl.GameVideoProjectionRow
 import com.projectgc.calendar.repository.etl.IngestEtlReadJdbcRepository
-import com.projectgc.calendar.repository.etl.ScreenshotProjectionRow
 import com.projectgc.calendar.repository.etl.ServiceEtlJdbcRepository
 import com.projectgc.calendar.repository.etl.WebsiteProjectionRow
 import org.junit.jupiter.api.Test
@@ -74,13 +72,27 @@ class AffectedGameIdCalculatorTest {
             val sourceResult = resultsByTable.getValue(tableName)
             assertNull(sourceResult.cursorFrom)
             assertNull(sourceResult.cursorTo)
-            assertEquals(allGameIds.toSet(), sourceResult.affectedGameIds)
             assertTrue(sourceResult.note.contains("slice6"))
             assertTrue(sourceResult.materializedInCurrentSlice)
             assertFalse(sourceResult.advanceCursor)
         }
+        listOf(
+            "game",
+            "release_date",
+            "involved_company",
+            "language_support",
+            "game_localization",
+            "cover",
+            "game_video",
+            "website",
+        ).forEach { tableName ->
+            assertEquals(allGameIds.toSet(), resultsByTable.getValue(tableName).affectedGameIds)
+        }
+        listOf("artwork", "screenshot", "alternative_name").forEach { tableName ->
+            assertEquals(emptySet(), resultsByTable.getValue(tableName).affectedGameIds)
+        }
 
-        verify(ingestRepository).findAllIngestGameIds()
+        verify(ingestRepository).findServiceCandidateGameIds()
         verify(serviceRepository, never()).findCursor(anyObject(String::class.java))
         verify(ingestRepository, never()).findAffectedGameIdsFromGameUpdatedAt(anyLong())
     }
@@ -88,41 +100,38 @@ class AffectedGameIdCalculatorTest {
     @Test
     fun `includes media projection diffs in affected set when core projections are unchanged`() {
         val allGameIds = listOf(1L, 2L, 3L)
+        val gameIdSet = allGameIds.toSet()
 
-        `when`(ingestRepository.findAllIngestGameIds()).thenReturn(allGameIds)
-        `when`(ingestRepository.loadAllGameProjectionRows()).thenReturn(allGameIds.map(::gameRow))
+        `when`(ingestRepository.findServiceCandidateGameIds()).thenReturn(allGameIds)
+        `when`(ingestRepository.loadGameProjectionRows(gameIdSet)).thenReturn(allGameIds.map(::gameRow))
         `when`(serviceRepository.loadCurrentGameProjectionRows()).thenReturn(allGameIds.map(::gameRow))
-        `when`(ingestRepository.loadAllGameReleaseProjectionRows()).thenReturn(emptyList())
+        `when`(ingestRepository.loadServiceGameReleaseProjectionRows(gameIdSet)).thenReturn(emptyList())
         `when`(serviceRepository.loadCurrentGameReleaseProjectionRows()).thenReturn(emptyList())
-        `when`(ingestRepository.loadAllGameCompanyProjectionRows()).thenReturn(emptyList())
+        `when`(ingestRepository.loadServiceGameCompanyProjectionRows(gameIdSet)).thenReturn(emptyList())
         `when`(serviceRepository.loadCurrentGameCompanyProjectionRows()).thenReturn(emptyList())
-        `when`(ingestRepository.loadAllGameLanguageProjectionRows()).thenReturn(emptyList())
+        `when`(ingestRepository.loadServiceGameLanguageProjectionRows(gameIdSet)).thenReturn(emptyList())
         `when`(serviceRepository.loadCurrentGameLanguageProjectionRows()).thenReturn(emptyList())
-        `when`(ingestRepository.loadAllGameLocalizationProjectionRows()).thenReturn(emptyList())
+        `when`(ingestRepository.loadServiceGameLocalizationProjectionRows(gameIdSet)).thenReturn(emptyList())
         `when`(serviceRepository.loadCurrentGameLocalizationProjectionRows()).thenReturn(emptyList())
-        `when`(ingestRepository.loadAllGameArrayProjectionRows(anyObject(String::class.java))).thenReturn(emptyList())
-        `when`(ingestRepository.loadAllGameRelationProjectionRows()).thenReturn(emptyList())
+        `when`(ingestRepository.loadGameArrayProjectionRows(gameIdSet, "genres")).thenReturn(emptyList())
         `when`(serviceRepository.loadCurrentGameDimensionProjectionRows(anyObject(String::class.java), anyObject(String::class.java)))
             .thenReturn(emptyList())
         `when`(serviceRepository.loadCurrentGameRelationProjectionRows()).thenReturn(emptyList())
 
-        `when`(ingestRepository.loadAllCoverProjectionRows()).thenReturn(
+        `when`(ingestRepository.loadCoverProjectionRows(gameIdSet)).thenReturn(
             listOf(CoverProjectionRow(id = 101L, gameId = 1L, gameLocalizationId = null, imageId = "cover-1", url = null, isMain = true))
         )
         `when`(serviceRepository.loadCurrentCoverProjectionRows()).thenReturn(emptyList())
-        `when`(ingestRepository.loadAllArtworkProjectionRows()).thenReturn(
+        `when`(serviceRepository.loadCurrentArtworkProjectionRows()).thenReturn(
             listOf(ArtworkProjectionRow(id = 201L, gameId = 2L, imageId = "art-2", url = null))
         )
-        `when`(serviceRepository.loadCurrentArtworkProjectionRows()).thenReturn(emptyList())
-        `when`(ingestRepository.loadAllScreenshotProjectionRows()).thenReturn(emptyList())
         `when`(serviceRepository.loadCurrentScreenshotProjectionRows()).thenReturn(emptyList())
-        `when`(ingestRepository.loadAllGameVideoProjectionRows()).thenReturn(emptyList())
+        `when`(ingestRepository.loadServiceGameVideoProjectionRows(gameIdSet)).thenReturn(emptyList())
         `when`(serviceRepository.loadCurrentGameVideoProjectionRows()).thenReturn(emptyList())
-        `when`(ingestRepository.loadAllWebsiteProjectionRows()).thenReturn(
+        `when`(ingestRepository.loadServiceWebsiteProjectionRows(gameIdSet)).thenReturn(
             listOf(WebsiteProjectionRow(id = 301L, gameId = 3L, typeId = 71L, url = "https://example.com", isTrusted = true))
         )
         `when`(serviceRepository.loadCurrentWebsiteProjectionRows()).thenReturn(emptyList())
-        `when`(ingestRepository.loadAllAlternativeNameProjectionRows()).thenReturn(emptyList())
         `when`(serviceRepository.loadCurrentAlternativeNameProjectionRows()).thenReturn(emptyList())
 
         `when`(serviceRepository.loadIds(anyObject(String::class.java))).thenAnswer { invocation ->
@@ -146,12 +155,13 @@ class AffectedGameIdCalculatorTest {
     @Test
     fun `includes both old and new game ids when release row keeps the same key but changes game ownership`() {
         val allGameIds = listOf(1L, 2L)
+        val gameIdSet = allGameIds.toSet()
 
-        `when`(ingestRepository.findAllIngestGameIds()).thenReturn(allGameIds)
-        `when`(ingestRepository.loadAllGameProjectionRows()).thenReturn(allGameIds.map(::gameRow))
+        `when`(ingestRepository.findServiceCandidateGameIds()).thenReturn(allGameIds)
+        `when`(ingestRepository.loadGameProjectionRows(gameIdSet)).thenReturn(allGameIds.map(::gameRow))
         `when`(serviceRepository.loadCurrentGameProjectionRows()).thenReturn(allGameIds.map(::gameRow))
 
-        `when`(ingestRepository.loadAllGameReleaseProjectionRows()).thenReturn(
+        `when`(ingestRepository.loadServiceGameReleaseProjectionRows(gameIdSet)).thenReturn(
             listOf(
                 GameReleaseProjectionRow(
                     id = 55L,
@@ -182,28 +192,24 @@ class AffectedGameIdCalculatorTest {
             )
         )
 
-        `when`(ingestRepository.loadAllGameCompanyProjectionRows()).thenReturn(emptyList())
+        `when`(ingestRepository.loadServiceGameCompanyProjectionRows(gameIdSet)).thenReturn(emptyList())
         `when`(serviceRepository.loadCurrentGameCompanyProjectionRows()).thenReturn(emptyList())
-        `when`(ingestRepository.loadAllGameLanguageProjectionRows()).thenReturn(emptyList())
+        `when`(ingestRepository.loadServiceGameLanguageProjectionRows(gameIdSet)).thenReturn(emptyList())
         `when`(serviceRepository.loadCurrentGameLanguageProjectionRows()).thenReturn(emptyList())
-        `when`(ingestRepository.loadAllGameLocalizationProjectionRows()).thenReturn(emptyList())
+        `when`(ingestRepository.loadServiceGameLocalizationProjectionRows(gameIdSet)).thenReturn(emptyList())
         `when`(serviceRepository.loadCurrentGameLocalizationProjectionRows()).thenReturn(emptyList())
-        `when`(ingestRepository.loadAllGameArrayProjectionRows(anyObject(String::class.java))).thenReturn(emptyList())
-        `when`(ingestRepository.loadAllGameRelationProjectionRows()).thenReturn(emptyList())
+        `when`(ingestRepository.loadGameArrayProjectionRows(gameIdSet, "genres")).thenReturn(emptyList())
         `when`(serviceRepository.loadCurrentGameDimensionProjectionRows(anyObject(String::class.java), anyObject(String::class.java)))
             .thenReturn(emptyList())
         `when`(serviceRepository.loadCurrentGameRelationProjectionRows()).thenReturn(emptyList())
-        `when`(ingestRepository.loadAllCoverProjectionRows()).thenReturn(emptyList())
+        `when`(ingestRepository.loadCoverProjectionRows(gameIdSet)).thenReturn(emptyList())
         `when`(serviceRepository.loadCurrentCoverProjectionRows()).thenReturn(emptyList())
-        `when`(ingestRepository.loadAllArtworkProjectionRows()).thenReturn(emptyList())
         `when`(serviceRepository.loadCurrentArtworkProjectionRows()).thenReturn(emptyList())
-        `when`(ingestRepository.loadAllScreenshotProjectionRows()).thenReturn(emptyList())
         `when`(serviceRepository.loadCurrentScreenshotProjectionRows()).thenReturn(emptyList())
-        `when`(ingestRepository.loadAllGameVideoProjectionRows()).thenReturn(emptyList())
+        `when`(ingestRepository.loadServiceGameVideoProjectionRows(gameIdSet)).thenReturn(emptyList())
         `when`(serviceRepository.loadCurrentGameVideoProjectionRows()).thenReturn(emptyList())
-        `when`(ingestRepository.loadAllWebsiteProjectionRows()).thenReturn(emptyList())
+        `when`(ingestRepository.loadServiceWebsiteProjectionRows(gameIdSet)).thenReturn(emptyList())
         `when`(serviceRepository.loadCurrentWebsiteProjectionRows()).thenReturn(emptyList())
-        `when`(ingestRepository.loadAllAlternativeNameProjectionRows()).thenReturn(emptyList())
         `when`(serviceRepository.loadCurrentAlternativeNameProjectionRows()).thenReturn(emptyList())
         `when`(serviceRepository.loadIds(anyObject(String::class.java))).thenReturn(emptySet())
 
@@ -215,20 +221,17 @@ class AffectedGameIdCalculatorTest {
     }
 
     private fun stubCommonInitialRows(allGameIds: List<Long>) {
-        `when`(ingestRepository.findAllIngestGameIds()).thenReturn(allGameIds)
-        `when`(ingestRepository.loadAllGameProjectionRows()).thenReturn(allGameIds.map(::gameRow))
-        `when`(ingestRepository.loadAllGameReleaseProjectionRows()).thenReturn(allGameIds.map(::releaseRow))
-        `when`(ingestRepository.loadAllGameCompanyProjectionRows()).thenReturn(allGameIds.map { companyRow(it, it + 90) })
-        `when`(ingestRepository.loadAllGameLanguageProjectionRows()).thenReturn(allGameIds.map { languageRow(it, it + 30) })
-        `when`(ingestRepository.loadAllGameLocalizationProjectionRows()).thenReturn(allGameIds.map(::localizationRow))
-        `when`(ingestRepository.loadAllGameArrayProjectionRows(anyObject(String::class.java))).thenReturn(emptyList())
-        `when`(ingestRepository.loadAllGameRelationProjectionRows()).thenReturn(emptyList())
-        `when`(ingestRepository.loadAllCoverProjectionRows()).thenReturn(allGameIds.map(::coverRow))
-        `when`(ingestRepository.loadAllArtworkProjectionRows()).thenReturn(allGameIds.map(::artworkRow))
-        `when`(ingestRepository.loadAllScreenshotProjectionRows()).thenReturn(allGameIds.map(::screenshotRow))
-        `when`(ingestRepository.loadAllGameVideoProjectionRows()).thenReturn(allGameIds.map(::gameVideoRow))
-        `when`(ingestRepository.loadAllWebsiteProjectionRows()).thenReturn(allGameIds.map(::websiteRow))
-        `when`(ingestRepository.loadAllAlternativeNameProjectionRows()).thenReturn(allGameIds.map(::alternativeNameRow))
+        val gameIdSet = allGameIds.toSet()
+        `when`(ingestRepository.findServiceCandidateGameIds()).thenReturn(allGameIds)
+        `when`(ingestRepository.loadGameProjectionRows(gameIdSet)).thenReturn(allGameIds.map(::gameRow))
+        `when`(ingestRepository.loadServiceGameReleaseProjectionRows(gameIdSet)).thenReturn(allGameIds.map(::releaseRow))
+        `when`(ingestRepository.loadServiceGameCompanyProjectionRows(gameIdSet)).thenReturn(allGameIds.map { companyRow(it, it + 90) })
+        `when`(ingestRepository.loadServiceGameLanguageProjectionRows(gameIdSet)).thenReturn(allGameIds.map { languageRow(it, it + 30) })
+        `when`(ingestRepository.loadServiceGameLocalizationProjectionRows(gameIdSet)).thenReturn(allGameIds.map(::localizationRow))
+        `when`(ingestRepository.loadGameArrayProjectionRows(gameIdSet, "genres")).thenReturn(emptyList())
+        `when`(ingestRepository.loadCoverProjectionRows(gameIdSet)).thenReturn(allGameIds.map(::coverRow))
+        `when`(ingestRepository.loadServiceGameVideoProjectionRows(gameIdSet)).thenReturn(allGameIds.map(::gameVideoRow))
+        `when`(ingestRepository.loadServiceWebsiteProjectionRows(gameIdSet)).thenReturn(allGameIds.map(::websiteRow))
 
         `when`(serviceRepository.loadIds(anyObject(String::class.java))).thenAnswer { invocation ->
             when (invocation.arguments[0] as String) {
@@ -297,20 +300,6 @@ class AffectedGameIdCalculatorTest {
         isMain = true,
     )
 
-    private fun artworkRow(gameId: Long) = ArtworkProjectionRow(
-        id = gameId + 2000,
-        gameId = gameId,
-        imageId = "artwork-$gameId",
-        url = "https://example.com/artwork-$gameId",
-    )
-
-    private fun screenshotRow(gameId: Long) = ScreenshotProjectionRow(
-        id = gameId + 3000,
-        gameId = gameId,
-        imageId = "screenshot-$gameId",
-        url = "https://example.com/screenshot-$gameId",
-    )
-
     private fun gameVideoRow(gameId: Long) = GameVideoProjectionRow(
         id = gameId + 4000,
         gameId = gameId,
@@ -324,13 +313,6 @@ class AffectedGameIdCalculatorTest {
         typeId = null,
         url = "https://example.com/site-$gameId",
         isTrusted = true,
-    )
-
-    private fun alternativeNameRow(gameId: Long) = AlternativeNameProjectionRow(
-        id = gameId + 6000,
-        gameId = gameId,
-        name = "alt-$gameId",
-        comment = "comment-$gameId",
     )
 
     @Suppress("UNCHECKED_CAST")

@@ -42,8 +42,8 @@ class IngestJdbcRepository(private val jdbc: JdbcTemplate) {
     private fun PreparedStatement.setUUID(index: Int, value: UUID?) {
         if (value != null) setObject(index, value) else setNull(index, Types.OTHER)
     }
-    private fun PreparedStatement.setLongArray(index: Int, value: Array<Long>?) {
-        if (value != null) setArray(index, connection.createArrayOf("bigint", value as Array<Any?>))
+    private fun PreparedStatement.setLongArray(index: Int, value: Collection<Long>?) {
+        if (value != null) setArray(index, connection.createArrayOf("bigint", value.toTypedArray()))
         else setNull(index, Types.ARRAY)
     }
     private fun PreparedStatement.setJsonb(index: Int, value: String?) {
@@ -101,7 +101,7 @@ class IngestJdbcRepository(private val jdbc: JdbcTemplate) {
             locale = EXCLUDED.locale, name = EXCLUDED.name, native_name = EXCLUDED.native_name,
             checksum = EXCLUDED.checksum, updated_at = EXCLUDED.updated_at
     """.trimIndent(), entities) { e ->
-        setLong(1, e.id); setNullableString(2, e.locale); setNullableString(3, e.name)
+        setLong(1, e.id); setNullableString(2, e.locale); setNullableString(3, e.englishName)
         setNullableString(4, e.nativeName); setUUID(5, e.checksum); setNullableLong(6, e.updatedAt)
     }
 
@@ -126,7 +126,7 @@ class IngestJdbcRepository(private val jdbc: JdbcTemplate) {
         ON CONFLICT (id) DO UPDATE SET
             region = EXCLUDED.region, checksum = EXCLUDED.checksum, updated_at = EXCLUDED.updated_at
     """.trimIndent(), entities) { e ->
-        setLong(1, e.id); setNullableString(2, e.region); setUUID(3, e.checksum); setNullableLong(4, e.updatedAt)
+        setLong(1, e.id); setNullableString(2, e.regionName); setUUID(3, e.checksum); setNullableLong(4, e.updatedAt)
     }
 
     // ── release_date_status ──────────────────────────────────────────────────────
@@ -190,21 +190,21 @@ class IngestJdbcRepository(private val jdbc: JdbcTemplate) {
         setLong(1, e.id); setNullableString(2, e.name); setNullableString(3, e.slug)
         setNullableString(4, e.summary); setNullableString(5, e.storyline)
         setNullableLong(6, e.firstReleaseDate)
-        setLongArray(7, e.releaseDates); setLongArray(8, e.platforms)
-        setNullableLong(9, e.gameStatus); setNullableLong(10, e.gameType)
-        setLongArray(11, e.languageSupports)
-        setLongArray(12, e.genres); setLongArray(13, e.themes)
-        setLongArray(14, e.playerPerspectives); setLongArray(15, e.gameModes)
-        setLongArray(16, e.keywords); setLongArray(17, e.involvedCompanies)
-        setNullableLong(18, e.parentGame)
-        setLongArray(19, e.remakes); setLongArray(20, e.remasters)
-        setLongArray(21, e.ports); setLongArray(22, e.standaloneExpansions)
-        setLongArray(23, e.similarGames)
-        setNullableLong(24, e.cover)
-        setLongArray(25, e.artworks); setLongArray(26, e.screenshots)
-        setLongArray(27, e.videos); setLongArray(28, e.websites)
-        setLongArray(29, e.alternativeNames); setLongArray(30, e.gameLocalizations)
-        setLongArray(31, e.tags)
+        setLongArray(7, e.releaseDateIds); setLongArray(8, e.platformIds)
+        setNullableLong(9, e.gameStatusId); setNullableLong(10, e.gameTypeId)
+        setLongArray(11, e.languageSupportIds)
+        setLongArray(12, e.genreIds); setLongArray(13, e.themeIds)
+        setLongArray(14, e.playerPerspectiveIds); setLongArray(15, e.gameModeIds)
+        setLongArray(16, e.keywordIds); setLongArray(17, e.involvedCompanyIds)
+        setNullableLong(18, e.parentGameId)
+        setLongArray(19, e.remakeIds); setLongArray(20, e.remasterIds)
+        setLongArray(21, e.portIds); setLongArray(22, e.standaloneExpansionIds)
+        setLongArray(23, e.similarGameIds)
+        setNullableLong(24, e.coverId)
+        setLongArray(25, e.artworkIds); setLongArray(26, e.screenshotIds)
+        setLongArray(27, e.videoIds); setLongArray(28, e.websiteIds)
+        setLongArray(29, e.alternativeNameIds); setLongArray(30, e.gameLocalizationIds)
+        setLongArray(31, e.tagNumbers)
         setUUID(32, e.checksum); setNullableLong(33, e.updatedAt)
     }
 
@@ -219,10 +219,10 @@ class IngestJdbcRepository(private val jdbc: JdbcTemplate) {
             date = EXCLUDED.date, y = EXCLUDED.y, m = EXCLUDED.m,
             human = EXCLUDED.human, checksum = EXCLUDED.checksum, updated_at = EXCLUDED.updated_at
     """.trimIndent(), entities) { e ->
-        setLong(1, e.id); setLong(2, e.game)
-        setNullableLong(3, e.platform); setNullableLong(4, e.releaseRegion); setNullableLong(5, e.status)
-        setNullableLong(6, e.date); setNullableInt(7, e.y); setNullableInt(8, e.m)
-        setNullableString(9, e.human); setUUID(10, e.checksum); setNullableLong(11, e.updatedAt)
+        setLong(1, e.id); setLong(2, e.gameId)
+        setNullableLong(3, e.platformId); setNullableLong(4, e.releaseRegionId); setNullableLong(5, e.statusId)
+        setNullableLong(6, e.releaseTimestamp); setNullableInt(7, e.releaseYear); setNullableInt(8, e.releaseMonth)
+        setNullableString(9, e.humanReadableDate); setUUID(10, e.checksum); setNullableLong(11, e.updatedAt)
     }
 
     // ── platform ──────────────────────────────────────────────────────────────────
@@ -237,7 +237,7 @@ class IngestJdbcRepository(private val jdbc: JdbcTemplate) {
     """.trimIndent(), entities) { e ->
         setLong(1, e.id); setNullableString(2, e.name)
         setNullableString(3, e.abbreviation); setNullableString(4, e.alternativeName)
-        setNullableLong(5, e.platformLogo); setNullableLong(6, e.platformType)
+        setNullableLong(5, e.platformLogoId); setNullableLong(6, e.platformTypeId)
         setUUID(7, e.checksum); setNullableLong(8, e.updatedAt)
     }
 
@@ -253,8 +253,8 @@ class IngestJdbcRepository(private val jdbc: JdbcTemplate) {
             checksum = EXCLUDED.checksum, updated_at = EXCLUDED.updated_at
     """.trimIndent(), entities) { e ->
         setLong(1, e.id); setNullableString(2, e.name)
-        setNullableLong(3, e.parent); setNullableLong(4, e.changedCompanyId)
-        setLongArray(5, e.developed); setLongArray(6, e.published)
+        setNullableLong(3, e.parentCompanyId); setNullableLong(4, e.changedCompanyId)
+        setLongArray(5, e.developedGameIds); setLongArray(6, e.publishedGameIds)
         setUUID(7, e.checksum); setNullableLong(8, e.updatedAt)
     }
 
@@ -269,7 +269,7 @@ class IngestJdbcRepository(private val jdbc: JdbcTemplate) {
             porting = EXCLUDED.porting, supporting = EXCLUDED.supporting,
             checksum = EXCLUDED.checksum, updated_at = EXCLUDED.updated_at
     """.trimIndent(), entities) { e ->
-        setLong(1, e.id); setLong(2, e.game); setLong(3, e.company)
+        setLong(1, e.id); setLong(2, e.gameId); setLong(3, e.companyId)
         setNullableBoolean(4, e.developer); setNullableBoolean(5, e.publisher)
         setNullableBoolean(6, e.porting); setNullableBoolean(7, e.supporting)
         setUUID(8, e.checksum); setNullableLong(9, e.updatedAt)
@@ -285,8 +285,8 @@ class IngestJdbcRepository(private val jdbc: JdbcTemplate) {
             language_support_type = EXCLUDED.language_support_type,
             checksum = EXCLUDED.checksum, updated_at = EXCLUDED.updated_at
     """.trimIndent(), entities) { e ->
-        setLong(1, e.id); setLong(2, e.game); setLong(3, e.language)
-        setNullableLong(4, e.languageSupportType); setUUID(5, e.checksum); setNullableLong(6, e.updatedAt)
+        setLong(1, e.id); setLong(2, e.gameId); setLong(3, e.languageId)
+        setNullableLong(4, e.languageSupportTypeId); setUUID(5, e.checksum); setNullableLong(6, e.updatedAt)
     }
 
     // ── game_localization ─────────────────────────────────────────────────────────
@@ -298,8 +298,8 @@ class IngestJdbcRepository(private val jdbc: JdbcTemplate) {
             game = EXCLUDED.game, region = EXCLUDED.region, name = EXCLUDED.name,
             cover = EXCLUDED.cover, checksum = EXCLUDED.checksum, updated_at = EXCLUDED.updated_at
     """.trimIndent(), entities) { e ->
-        setLong(1, e.id); setLong(2, e.game); setNullableLong(3, e.region); setNullableString(4, e.name)
-        setNullableLong(5, e.cover); setUUID(6, e.checksum); setNullableLong(7, e.updatedAt)
+        setLong(1, e.id); setLong(2, e.gameId); setNullableLong(3, e.regionId); setNullableString(4, e.name)
+        setNullableLong(5, e.coverId); setUUID(6, e.checksum); setNullableLong(7, e.updatedAt)
     }
 
     // ── cover ─────────────────────────────────────────────────────────────────────
@@ -311,7 +311,7 @@ class IngestJdbcRepository(private val jdbc: JdbcTemplate) {
             game = EXCLUDED.game, game_localization = EXCLUDED.game_localization,
             image_id = EXCLUDED.image_id, url = EXCLUDED.url, checksum = EXCLUDED.checksum
     """.trimIndent(), entities) { e ->
-        setLong(1, e.id); setNullableLong(2, e.game); setNullableLong(3, e.gameLocalization)
+        setLong(1, e.id); setNullableLong(2, e.gameId); setNullableLong(3, e.gameLocalizationId)
         setNullableString(4, e.imageId); setNullableString(5, e.url); setUUID(6, e.checksum)
     }
 
@@ -324,7 +324,7 @@ class IngestJdbcRepository(private val jdbc: JdbcTemplate) {
             game = EXCLUDED.game, image_id = EXCLUDED.image_id,
             url = EXCLUDED.url, checksum = EXCLUDED.checksum
     """.trimIndent(), entities) { e ->
-        setLong(1, e.id); setLong(2, e.game)
+        setLong(1, e.id); setLong(2, e.gameId)
         setNullableString(3, e.imageId); setNullableString(4, e.url); setUUID(5, e.checksum)
     }
 
@@ -337,7 +337,7 @@ class IngestJdbcRepository(private val jdbc: JdbcTemplate) {
             game = EXCLUDED.game, image_id = EXCLUDED.image_id,
             url = EXCLUDED.url, checksum = EXCLUDED.checksum
     """.trimIndent(), entities) { e ->
-        setLong(1, e.id); setLong(2, e.game)
+        setLong(1, e.id); setLong(2, e.gameId)
         setNullableString(3, e.imageId); setNullableString(4, e.url); setUUID(5, e.checksum)
     }
 
@@ -350,7 +350,7 @@ class IngestJdbcRepository(private val jdbc: JdbcTemplate) {
             game = EXCLUDED.game, name = EXCLUDED.name,
             video_id = EXCLUDED.video_id, checksum = EXCLUDED.checksum
     """.trimIndent(), entities) { e ->
-        setLong(1, e.id); setLong(2, e.game)
+        setLong(1, e.id); setLong(2, e.gameId)
         setNullableString(3, e.name); setNullableString(4, e.videoId); setUUID(5, e.checksum)
     }
 
@@ -363,8 +363,8 @@ class IngestJdbcRepository(private val jdbc: JdbcTemplate) {
             game = EXCLUDED.game, type = EXCLUDED.type, url = EXCLUDED.url,
             trusted = EXCLUDED.trusted, checksum = EXCLUDED.checksum
     """.trimIndent(), entities) { e ->
-        setLong(1, e.id); setLong(2, e.game)
-        setNullableLong(3, e.type); setNullableString(4, e.url)
+        setLong(1, e.id); setLong(2, e.gameId)
+        setNullableLong(3, e.typeId); setNullableString(4, e.url)
         setNullableBoolean(5, e.trusted); setUUID(6, e.checksum)
     }
 
@@ -377,7 +377,7 @@ class IngestJdbcRepository(private val jdbc: JdbcTemplate) {
             game = EXCLUDED.game, name = EXCLUDED.name,
             comment = EXCLUDED.comment, checksum = EXCLUDED.checksum
     """.trimIndent(), entities) { e ->
-        setLong(1, e.id); setLong(2, e.game)
+        setLong(1, e.id); setLong(2, e.gameId)
         setNullableString(3, e.name); setNullableString(4, e.comment); setUUID(5, e.checksum)
     }
 

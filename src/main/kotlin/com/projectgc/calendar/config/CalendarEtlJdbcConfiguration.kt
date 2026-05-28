@@ -10,8 +10,10 @@ import org.springframework.context.annotation.Configuration
 import org.springframework.context.annotation.Primary
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.jdbc.datasource.DataSourceTransactionManager
+import org.springframework.orm.jpa.JpaTransactionManager
 import org.springframework.transaction.PlatformTransactionManager
 import org.springframework.transaction.support.TransactionTemplate
+import jakarta.persistence.EntityManagerFactory
 import javax.sql.DataSource
 
 @Configuration
@@ -75,6 +77,11 @@ class CalendarEtlJdbcConfiguration {
     @Bean
     @Primary
     fun jdbcTemplate(dataSource: DataSource) = JdbcTemplate(dataSource)
+
+    @Bean("transactionManager")
+    @Primary
+    fun transactionManager(entityManagerFactory: EntityManagerFactory): PlatformTransactionManager =
+        JpaTransactionManager(entityManagerFactory)
 
     @Bean("serviceEtlTransactionManager")
     fun serviceEtlTransactionManager(

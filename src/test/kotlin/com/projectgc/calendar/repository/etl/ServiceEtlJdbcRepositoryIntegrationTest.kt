@@ -49,10 +49,17 @@ class ServiceEtlJdbcRepositoryIntegrationTest {
     }
 
     @Test
-    fun `game relation diff includes existing source game when related game is newly materialized in same run`() {
-        ingestJdbc.update("INSERT INTO ingest.game (id, similar_games) VALUES (1, ARRAY[2]::BIGINT[])")
-        ingestJdbc.update("INSERT INTO ingest.game (id) VALUES (2)")
-        serviceJdbc.update("INSERT INTO service.game (id) VALUES (1)")
+    fun `game relation diff marks scoped service game when stale relation should be cleaned up`() {
+        ingestJdbc.update("INSERT INTO ingest.game (id, name) VALUES (1, 'Scoped Game')")
+        ingestJdbc.update(
+            """
+            INSERT INTO ingest.release_date (id, game, platform, release_region, status, date)
+            VALUES (100, 1, 6, 8, 6, 1700000000)
+            """.trimIndent(),
+        )
+        serviceJdbc.update("INSERT INTO service.game (id, name) VALUES (1, 'Scoped Game')")
+        serviceJdbc.update("INSERT INTO service.game (id, name) VALUES (2, 'Related Game')")
+        serviceJdbc.update("INSERT INTO service.game_relation (game_id, related_game_id, relation_type) VALUES (1, 2, 'SIMILAR')")
 
         val calculationResult = calculator.calculate(500L)
         val gameSourceResult = calculationResult.sourceResults.first { it.tableName == "game" }
@@ -153,6 +160,21 @@ class ServiceEtlJdbcRepositoryIntegrationTest {
                 region BIGINT NULL,
                 name TEXT NULL,
                 updated_at BIGINT NULL
+            )
+            """.trimIndent(),
+            """
+            CREATE TABLE ingest.region (
+                id BIGINT PRIMARY KEY,
+                name TEXT NULL,
+                identifier TEXT NULL
+            )
+            """.trimIndent(),
+            """
+            CREATE TABLE ingest.language (
+                id BIGINT PRIMARY KEY,
+                locale TEXT NULL,
+                name TEXT NULL,
+                native_name TEXT NULL
             )
             """.trimIndent(),
             """

@@ -192,7 +192,7 @@ class ServiceEtlServiceTest {
         doAnswer {
             events += "ingest-load-game-statuses"
             emptyList<NamedDimensionRow>()
-        }.`when`(ingestRepository).loadGameStatuses()
+        }.`when`(ingestRepository).loadServiceGameStatuses()
         doAnswer {
             events += "calculator-prepare"
             preparedInputs
@@ -216,7 +216,7 @@ class ServiceEtlServiceTest {
         assertTrue(events.indexOf("calculator-calculate") > transactionBeginIndex)
 
         val order = inOrder(ingestRepository, affectedGameIdCalculator, repository)
-        order.verify(ingestRepository).loadGameStatuses()
+        order.verify(ingestRepository).loadServiceGameStatuses()
         order.verify(affectedGameIdCalculator).prepare(anyLong())
         order.verify(repository).syncGameStatuses(anyList())
         order.verify(affectedGameIdCalculator).calculate(anyObject(PreparedAffectedGameIdInputs::class.java))
@@ -302,23 +302,16 @@ class ServiceEtlServiceTest {
             note = "diff-based upsert: ingest.platform_logo has no updated_at cursor",
         )
 
-        `when`(ingestRepository.loadGameStatuses()).thenReturn(emptyList<NamedDimensionRow>())
-        `when`(ingestRepository.loadGameTypes()).thenReturn(emptyList())
-        `when`(ingestRepository.loadLanguages()).thenReturn(emptyList())
-        `when`(ingestRepository.loadRegions()).thenReturn(emptyList())
-        `when`(ingestRepository.loadReleaseRegions()).thenReturn(emptyList())
-        `when`(ingestRepository.loadReleaseStatuses()).thenReturn(emptyList())
-        `when`(ingestRepository.loadGenres()).thenReturn(emptyList())
-        `when`(ingestRepository.loadThemes()).thenReturn(emptyList())
-        `when`(ingestRepository.loadPlayerPerspectives()).thenReturn(emptyList())
-        `when`(ingestRepository.loadGameModes()).thenReturn(emptyList())
-        `when`(ingestRepository.loadKeywords()).thenReturn(emptyList())
-        `when`(ingestRepository.loadLanguageSupportTypes()).thenReturn(emptyList())
-        `when`(ingestRepository.loadWebsiteTypes()).thenReturn(emptyList())
-        `when`(ingestRepository.loadPlatformLogos()).thenReturn(emptyList())
-        `when`(ingestRepository.loadPlatformTypes()).thenReturn(emptyList())
-        `when`(ingestRepository.loadPlatforms()).thenReturn(emptyList())
-        `when`(ingestRepository.loadCompanies()).thenReturn(emptyList())
+        `when`(ingestRepository.loadServiceGameStatuses()).thenReturn(emptyList<NamedDimensionRow>())
+        `when`(ingestRepository.loadServiceGameTypes()).thenReturn(emptyList())
+        `when`(ingestRepository.loadServiceLanguages()).thenReturn(emptyList())
+        `when`(ingestRepository.loadServiceRegions()).thenReturn(emptyList())
+        `when`(ingestRepository.loadServiceReleaseRegions()).thenReturn(emptyList())
+        `when`(ingestRepository.loadServiceReleaseStatuses()).thenReturn(emptyList())
+        `when`(ingestRepository.loadServiceGenres()).thenReturn(emptyList())
+        `when`(ingestRepository.loadServiceWebsiteTypes()).thenReturn(emptyList())
+        `when`(ingestRepository.loadServicePlatforms()).thenReturn(emptyList())
+        `when`(ingestRepository.loadServiceCompanies()).thenReturn(emptyList())
 
         `when`(repository.syncGameStatuses(anyList())).thenReturn(emptyCursorResult)
         `when`(repository.syncGameTypes(anyList())).thenReturn(emptyCursorResult)
