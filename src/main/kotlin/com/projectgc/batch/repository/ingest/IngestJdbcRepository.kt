@@ -162,9 +162,9 @@ class IngestJdbcRepository(private val jdbc: JdbcTemplate) {
             genres, themes, player_perspectives, game_modes, keywords, involved_companies,
             parent_game, remakes, remasters, ports, standalone_expansions, similar_games,
             cover, artworks, screenshots, videos, websites, alternative_names,
-            game_localizations, tags, checksum, updated_at
+            game_localizations, hypes, follows, tags, checksum, updated_at
         ) VALUES (
-            ?,?,?,?,?,?,  ?,?,?,?,?,  ?,?,?,?,?,?,  ?,?,?,?,?,?,  ?,?,?,?,?,?,  ?,?,?,?
+            ?,?,?,?,?,?,  ?,?,?,?,?,  ?,?,?,?,?,?,  ?,?,?,?,?,?,  ?,?,?,?,?,?,  ?,?,?,?,?,?
         )
         ON CONFLICT (id) DO UPDATE SET
             name = EXCLUDED.name, slug = EXCLUDED.slug,
@@ -184,7 +184,9 @@ class IngestJdbcRepository(private val jdbc: JdbcTemplate) {
             cover = EXCLUDED.cover, artworks = EXCLUDED.artworks,
             screenshots = EXCLUDED.screenshots, videos = EXCLUDED.videos,
             websites = EXCLUDED.websites, alternative_names = EXCLUDED.alternative_names,
-            game_localizations = EXCLUDED.game_localizations, tags = EXCLUDED.tags,
+            game_localizations = EXCLUDED.game_localizations,
+            hypes = EXCLUDED.hypes, follows = EXCLUDED.follows,
+            tags = EXCLUDED.tags,
             checksum = EXCLUDED.checksum, updated_at = EXCLUDED.updated_at
     """.trimIndent(), entities) { e ->
         setLong(1, e.id); setNullableString(2, e.name); setNullableString(3, e.slug)
@@ -204,8 +206,9 @@ class IngestJdbcRepository(private val jdbc: JdbcTemplate) {
         setLongArray(25, e.artworkIds); setLongArray(26, e.screenshotIds)
         setLongArray(27, e.videoIds); setLongArray(28, e.websiteIds)
         setLongArray(29, e.alternativeNameIds); setLongArray(30, e.gameLocalizationIds)
-        setLongArray(31, e.tagNumbers)
-        setUUID(32, e.checksum); setNullableLong(33, e.updatedAt)
+        setNullableInt(31, e.hypes); setNullableInt(32, e.follows)
+        setLongArray(33, e.tagNumbers)
+        setUUID(34, e.checksum); setNullableLong(35, e.updatedAt)
     }
 
     // ── release_date ──────────────────────────────────────────────────────────────

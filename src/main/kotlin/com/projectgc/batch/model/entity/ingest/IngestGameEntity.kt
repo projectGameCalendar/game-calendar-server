@@ -124,6 +124,12 @@ class IngestGameEntity : IngestEntity() {
     @Column(name = "tags", columnDefinition = "bigint[]")
     var tagNumbers: List<Long>? = null
 
+    @Column(name = "hypes")
+    var hypes: Int? = null
+
+    @Column(name = "follows")
+    var follows: Int? = null
+
     @Column(name = "updated_at")
     var updatedAt: Long? = null
 }

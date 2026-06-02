@@ -235,7 +235,7 @@ class IngestEtlReadJdbcRepository(
             ids = gameIds,
             sqlBuilder = { placeholders ->
                 """
-                SELECT id, slug, name, summary, storyline, first_release_date, game_status, game_type, updated_at, tags
+                SELECT id, slug, name, summary, storyline, first_release_date, game_status, game_type, updated_at, tags, hypes, follows
                 FROM ingest.game
                 WHERE id IN ($placeholders)
                 ORDER BY id
@@ -717,6 +717,8 @@ class IngestEtlReadJdbcRepository(
             typeId = getLong("game_type").takeIf { !wasNull() },
             sourceUpdatedAtEpochSecond = getLong("updated_at").takeIf { !wasNull() },
             tags = getNullableLongList("tags"),
+            hypes = getInt("hypes").takeIf { !wasNull() },
+            follows = getInt("follows").takeIf { !wasNull() },
         )
 
     private fun ResultSet.toGameLocalizationProjectionRow() =

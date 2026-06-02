@@ -253,6 +253,8 @@ class AffectedGameIdCalculatorTest {
         typeId = null,
         sourceUpdatedAtEpochSecond = null,
         tags = null,
+        hypes = null,
+        follows = null,
     )
 
     private fun releaseRow(gameId: Long) = GameReleaseProjectionRow(
