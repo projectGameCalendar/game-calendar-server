@@ -35,6 +35,8 @@ data class IgdbGameDto(
     val websites: List<Long>?,
     val alternativeNames: List<Long>?,
     val gameLocalizations: List<Long>?,
+    val hypes: Int?,
+    val follows: Int?,
     val tags: List<Long>?,
     val checksum: String?,
     val updatedAt: Long?,

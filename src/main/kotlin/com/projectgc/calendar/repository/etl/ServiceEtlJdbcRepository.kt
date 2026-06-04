@@ -418,7 +418,9 @@ class ServiceEtlJdbcRepository(
                 status_id,
                 type_id,
                 EXTRACT(EPOCH FROM source_updated_at)::BIGINT AS source_updated_at,
-                tags
+                tags,
+                hypes,
+                follows
             FROM service.game
             ORDER BY id
             """.trimIndent(),
@@ -434,6 +436,8 @@ class ServiceEtlJdbcRepository(
                 typeId = rs.getLong("type_id").takeIf { !rs.wasNull() },
                 sourceUpdatedAtEpochSecond = rs.getLong("source_updated_at").takeIf { !rs.wasNull() },
                 tags = rs.getNullableLongList("tags"),
+                hypes = rs.getInt("hypes").takeIf { !rs.wasNull() },
+                follows = rs.getInt("follows").takeIf { !rs.wasNull() },
             )
         }
 
@@ -673,8 +677,8 @@ class ServiceEtlJdbcRepository(
         batchUpsert(
             """
             INSERT INTO service.game
-                (id, slug, name, summary, storyline, first_release_date, status_id, type_id, source_updated_at, tags)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                (id, slug, name, summary, storyline, first_release_date, status_id, type_id, source_updated_at, tags, hypes, follows)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT (id) DO UPDATE SET
                 slug = EXCLUDED.slug,
                 name = EXCLUDED.name,
@@ -685,6 +689,8 @@ class ServiceEtlJdbcRepository(
                 type_id = EXCLUDED.type_id,
                 source_updated_at = EXCLUDED.source_updated_at,
                 tags = EXCLUDED.tags,
+                hypes = EXCLUDED.hypes,
+                follows = EXCLUDED.follows,
                 updated_at = now()
             """.trimIndent(),
             resolvedGameRows,
@@ -699,6 +705,8 @@ class ServiceEtlJdbcRepository(
             setNullableLong(8, row.typeId)
             setNullableInstantFromEpochSecond(9, row.sourceUpdatedAtEpochSecond)
             setNullableLongArray(10, row.tags)
+            setNullableInt(11, row.hypes)
+            setNullableInt(12, row.follows)
         }
 
         deleteByGameIds("service.game_localization", materializedGameIds)
@@ -1322,6 +1330,8 @@ data class GameProjectionRow(
     val typeId: Long?,
     val sourceUpdatedAtEpochSecond: Long?,
     val tags: List<Long>?,
+    val hypes: Int?,
+    val follows: Int?,
 )
 
 data class GameLocalizationProjectionRow(
