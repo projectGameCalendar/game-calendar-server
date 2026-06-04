@@ -19,6 +19,8 @@ class ServiceEtlJdbcRepositorySupportTest {
                 typeId = 20L,
                 sourceUpdatedAtEpochSecond = 100L,
                 tags = listOf(1L, 2L),
+                hypes = null,
+                follows = null,
             ),
         )
 
@@ -35,6 +37,8 @@ class ServiceEtlJdbcRepositorySupportTest {
                     typeId = null,
                     sourceUpdatedAtEpochSecond = 100L,
                     tags = listOf(1L, 2L),
+                    hypes = null,
+                    follows = null,
                 ),
             ),
             resolveGameReferences(

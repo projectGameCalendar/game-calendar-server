@@ -28,9 +28,9 @@ igdb:
     # 제외: 3=Bundle, 5=Mod, 10=Expanded Game, 11=Port, 12=Fork, 13=Pack, 14=Update
     game-types: [0, 1, 2, 4, 6, 7, 8, 9]
     # 수집 기준 최초 출시일 하한 (Unix timestamp)
-    # 1735689600 = 2025-01-01 00:00:00 UTC
+    # 1767225600 = 2026-01-01 00:00:00 UTC
     # first_release_date 가 null 인 TBA 타이틀은 수집 대상에서 제외
-    min-first-release-date: 1735689600
+    min-first-release-date: 1767225600
     # 수집 대상 플랫폼 ID 목록 (비어 있으면 전체 플랫폼)
     # 6=PC(Windows), 14=macOS, 34=Android, 39=iOS,
     # 48=PS4, 130=Nintendo Switch, 167=PS5, 169=Xbox Series X|S, 508=Nintendo Switch 2
@@ -38,4 +38,4 @@ igdb:
 
 batch:
   sync:
-    cron: "0 0 3 * * TUE,SAT"  # 매주 화요일 새벽 3시
+    cron: "0 0 3 * * TUE,SAT"  # 매주 화/토 새벽 3시

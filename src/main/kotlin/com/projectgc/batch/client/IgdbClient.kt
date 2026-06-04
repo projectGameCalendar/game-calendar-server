@@ -38,6 +38,7 @@ class IgdbClient(
             ports, standalone_expansions, similar_games,
             cover, artworks, screenshots, videos, websites,
             alternative_names, game_localizations,
+            hypes, follows,
             tags, checksum, updated_at
         """.trimIndent()
 
