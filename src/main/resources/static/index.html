@@ -1,0 +1,587 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Game Calendar — 데모</title>
+  <style>
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; background: #0f1115; color: #e6e8ec; font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Segoe UI", Roboto, sans-serif; }
+    a { color: #6aa9ff; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    header {
+      position: sticky; top: 0; z-index: 5;
+      background: rgba(15, 17, 21, 0.95);
+      backdrop-filter: blur(8px);
+      border-bottom: 1px solid #20232b;
+      padding: 14px 24px;
+    }
+    .header-row { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+    .title { font-size: 17px; font-weight: 600; }
+    .month-nav { display: flex; align-items: center; gap: 6px; }
+    .month-nav button {
+      background: #1a1d24; color: #e6e8ec; border: 1px solid #2a2f3a;
+      width: 30px; height: 30px; border-radius: 6px; cursor: pointer; font-size: 14px;
+    }
+    .month-nav button:hover { background: #20242d; }
+    .month-label { font-size: 15px; font-weight: 600; min-width: 100px; text-align: center; }
+    .month-nav .today-btn {
+      width: auto; padding: 0 12px; font-size: 12px;
+    }
+
+    .chips { display: flex; gap: 6px; flex-wrap: wrap; margin-left: auto; }
+    .chip {
+      padding: 5px 10px; font-size: 12px; border-radius: 999px;
+      background: #1a1d24; border: 1px solid #2a2f3a;
+      cursor: pointer; user-select: none; transition: all 0.15s;
+    }
+    .chip.active { background: #2b6cff; border-color: #2b6cff; color: white; }
+    .chip:hover:not(.active) { background: #20242d; }
+
+    main { max-width: 1400px; margin: 0 auto; padding: 20px 24px; }
+
+    .status { text-align: center; padding: 40px 16px; color: #9aa0a6; font-size: 14px; }
+    .status.error { color: #ff8080; }
+
+    /* ===== 캘린더 그리드 ===== */
+	    .calendar { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 1px; background: #20232b; border: 1px solid #20232b; border-radius: 8px; overflow: hidden; width: 100%; touch-action: pan-y; }
+    .dow {
+      background: #16191f; padding: 8px 10px; font-size: 12px; font-weight: 600;
+      color: #9aa0a6; text-align: center;
+    }
+    .dow.sun { color: #ff8a8a; }
+    .dow.sat { color: #80b3ff; }
+
+    .cell {
+      background: #16191f; min-height: 120px; padding: 6px 8px;
+      display: flex; flex-direction: column; gap: 4px;
+      position: relative;
+      min-width: 0; overflow: hidden;
+	    }
+	    .cell.outside { background: #11131a; color: #555a66; }
+	    .cell.today {
+	      box-shadow: inset 0 0 0 2px #f4b860;
+	      background: #1b1a16;
+	    }
+	    .cell.today .day-num {
+	      display: inline-flex; align-items: center; justify-content: center;
+	      width: 22px; height: 22px; border-radius: 50%;
+	      background: #f4b860; color: #11131a; font-weight: 800;
+	    }
+	    .day-num { font-size: 12px; color: #c0c4cc; font-weight: 500; line-height: 1; }
+    .day-num.sun { color: #ff8a8a; }
+    .day-num.sat { color: #80b3ff; }
+    .cell.outside .day-num { color: #555a66; }
+
+    .cell-items { display: flex; flex-direction: column; gap: 2px; overflow: hidden; min-width: 0; }
+    .release-item {
+      font-size: 11px; line-height: 1.3; padding: 2px 5px;
+      background: #1a1d24; border-left: 2px solid #2b6cff;
+      border-radius: 3px; cursor: pointer;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      color: #e6e8ec;
+    }
+    .release-item:hover { background: #20242d; }
+	    .release-item .platforms {
+	      color: #9aa0a6; font-size: 10px; margin-left: 4px;
+	    }
+	    .release-badge {
+	      display: inline-block; margin-left: 4px; padding: 1px 4px;
+	      border-radius: 3px; font-size: 10px; font-weight: 600;
+	      color: #e6e8ec; background: #2a2f3a;
+	    }
+	    .release-badge.kr { background: #1b3a2b; color: #6dd99b; }
+	    .release-item.has-kr { border-left-color: #6dd99b; }
+	
+	    .more-link {
+	      appearance: none; border: 0; background: transparent; font: inherit;
+	      display: block; width: 100%; text-align: left;
+	      font-size: 10px; color: #9aa0a6; padding: 1px 5px;
+	      cursor: pointer;
+	    }
+	    .more-link:hover { color: #2b6cff; }
+
+    /* ===== 모달 ===== */
+    .modal-backdrop {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.75);
+      display: none; align-items: center; justify-content: center;
+      z-index: 100; padding: 24px;
+    }
+    .modal-backdrop.open { display: flex; }
+    .modal {
+      background: #16191f; border: 1px solid #2a2f3a; border-radius: 10px;
+      max-width: 600px; width: 100%; max-height: calc(100vh - 48px);
+      overflow-y: auto; position: relative;
+    }
+    .modal-close {
+      position: absolute; top: 10px; right: 10px;
+      background: transparent; color: #9aa0a6; border: 0;
+      width: 28px; height: 28px; border-radius: 50%; cursor: pointer;
+      font-size: 18px; line-height: 1;
+    }
+    .modal-close:hover { background: #20242d; color: #e6e8ec; }
+    .modal-body { padding: 24px 28px; }
+
+    .detail-title { font-size: 20px; font-weight: 600; margin: 0 0 4px; }
+    .detail-default { color: #9aa0a6; font-size: 13px; margin-bottom: 16px; }
+    .detail-meta { display: grid; grid-template-columns: max-content 1fr; gap: 6px 14px; font-size: 13px; margin: 12px 0; }
+    .detail-meta dt { color: #9aa0a6; }
+    .detail-meta dd { margin: 0; color: #e6e8ec; }
+
+    .platform-tag {
+      display: inline-block; font-size: 11px; padding: 2px 7px; border-radius: 4px;
+      background: #1f2530; color: #c0c4cc; border: 1px solid #2a2f3a; margin-right: 4px; margin-bottom: 2px;
+    }
+	    .kr-badge {
+	      font-size: 11px; padding: 2px 7px; border-radius: 4px;
+	      background: #1b3a2b; color: #6dd99b; border: 1px solid #2a5240;
+	    }
+	    .popularity-stats {
+	      display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 14px;
+	    }
+	    .popularity-stat {
+	      min-width: 104px; padding: 8px 10px; border-radius: 6px;
+	      background: #1a1d24; border: 1px solid #2a2f3a;
+	    }
+	    .popularity-stat span {
+	      display: block; color: #9aa0a6; font-size: 11px; margin-bottom: 2px;
+	    }
+	    .popularity-stat strong {
+	      color: #f4b860; font-size: 18px; line-height: 1.2;
+	    }
+
+    .section { margin-top: 16px; padding-top: 14px; border-top: 1px solid #20232b; }
+    .section h3 { font-size: 11px; color: #9aa0a6; margin: 0 0 8px; text-transform: uppercase; letter-spacing: 0.5px; font-weight: 600; }
+    .section .summary { font-size: 13px; line-height: 1.6; color: #c0c4cc; white-space: pre-wrap; }
+    .section .links { display: flex; flex-wrap: wrap; gap: 6px; }
+    .section .link {
+      padding: 5px 10px; background: #1a1d24; border: 1px solid #2a2f3a;
+      border-radius: 5px; font-size: 12px; color: #6aa9ff;
+    }
+
+    /* 하루 안에 너무 많은 항목 → 컨테이너가 늘어나서 셀 확장 허용 */
+    @media (max-width: 720px) {
+      .cell { min-height: 80px; padding: 4px 5px; }
+      .release-item { font-size: 10px; padding: 1px 4px; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="header-row">
+    <div class="title">🎮 Game Calendar</div>
+    <div class="month-nav">
+      <button id="prev">◀</button>
+      <span class="month-label" id="month-label">—</span>
+      <button id="next">▶</button>
+      <button id="today" class="today-btn">오늘</button>
+    </div>
+    <div class="chips" id="platform-chips">
+      <span class="chip active" data-group="ALL">전체</span>
+      <span class="chip" data-group="PC">PC</span>
+      <span class="chip" data-group="PLAYSTATION">PS</span>
+      <span class="chip" data-group="NINTENDO">Nintendo</span>
+      <span class="chip" data-group="XBOX">Xbox</span>
+      <span class="chip" data-group="MOBILE">Mobile</span>
+    </div>
+  </div>
+</header>
+
+<main>
+  <div id="content"></div>
+</main>
+
+<div class="modal-backdrop" id="modal-backdrop">
+  <div class="modal">
+    <button class="modal-close" id="modal-close">×</button>
+    <div class="modal-body" id="modal-body"></div>
+  </div>
+</div>
+
+<script>
+	  const $ = (id) => document.getElementById(id);
+	  const content = $('content');
+	  const INITIAL_VISIBLE_RELEASES_PER_DAY = 5;
+	  const CALENDAR_VISIBLE_WEEKS = 6;
+	  const MONTH_DRAG_THRESHOLD = 80;
+	  const MONTH_WHEEL_THRESHOLD = 120;
+	  const MONTH_WHEEL_COOLDOWN_MS = 450;
+	
+	  // ===== 상태 =====
+	  let viewYear, viewMonth; // viewMonth: 0-based
+	  let viewStartDate;
+	  let selectedGroups = new Set(); // empty → 전체
+	  let expandedDates = new Set();
+	  let wheelDeltaForMonth = 0;
+	  let lastWheelMonthChangedAt = 0;
+	  let dragGesture = null;
+	  let loadSequence = 0;
+
+  // ===== 플랫폼 칩 =====
+  document.querySelectorAll('#platform-chips .chip').forEach(chip => {
+    chip.addEventListener('click', () => {
+	      const g = chip.dataset.group;
+	      if (g === 'ALL') selectedGroups.clear();
+	      else selectedGroups.has(g) ? selectedGroups.delete(g) : selectedGroups.add(g);
+	      refreshChipStyle();
+	      resetAndLoad();
+	    });
+	  });
+  function refreshChipStyle() {
+    document.querySelectorAll('#platform-chips .chip').forEach(chip => {
+      const g = chip.dataset.group;
+      if (g === 'ALL') chip.classList.toggle('active', selectedGroups.size === 0);
+      else chip.classList.toggle('active', selectedGroups.has(g));
+    });
+  }
+
+	  // ===== 월 네비게이션 =====
+	  $('prev').addEventListener('click', () => { changeMonth(-1); });
+	  $('next').addEventListener('click', () => { changeMonth(1); });
+	  $('today').addEventListener('click', () => { setMonth(new Date()); resetAndLoad(); });
+	  content.addEventListener('wheel', handleCalendarWheel, { passive: false });
+	  content.addEventListener('pointerdown', startCalendarDrag);
+	  content.addEventListener('pointermove', trackCalendarDrag);
+	  content.addEventListener('pointerup', finishCalendarDrag);
+	  content.addEventListener('pointercancel', cancelCalendarDrag);
+	  function changeMonth(delta) {
+	    const d = new Date(viewYear, viewMonth + delta, 1);
+	    setMonth(d);
+	    resetAndLoad();
+	  }
+	  function shiftWeeks(delta) {
+	    viewStartDate = addDays(viewStartDate, delta * 7);
+	    syncMonthFromVisibleRange();
+	    resetAndLoad();
+	  }
+	  function setMonth(d) {
+	    viewYear = d.getFullYear();
+	    viewMonth = d.getMonth();
+	    viewStartDate = startOfWeek(new Date(viewYear, viewMonth, 1));
+	    $('month-label').textContent = `${viewYear}년 ${viewMonth + 1}월`;
+	  }
+	  function syncMonthFromVisibleRange() {
+	    const anchorDate = addDays(viewStartDate, Math.floor((CALENDAR_VISIBLE_WEEKS * 7) / 2));
+	    viewYear = anchorDate.getFullYear();
+	    viewMonth = anchorDate.getMonth();
+	    $('month-label').textContent = `${viewYear}년 ${viewMonth + 1}월`;
+	  }
+	  function resetAndLoad() {
+	    expandedDates.clear();
+	    load();
+	  }
+	  function handleCalendarWheel(e) {
+	    if (!e.target.closest('.calendar')) return;
+	    const now = Date.now();
+	    if (now - lastWheelMonthChangedAt < MONTH_WHEEL_COOLDOWN_MS) {
+	      e.preventDefault();
+	      return;
+	    }
+
+	    const delta = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
+	    if (Math.abs(delta) < 1) return;
+	    wheelDeltaForMonth += delta;
+
+	    if (Math.abs(wheelDeltaForMonth) >= MONTH_WHEEL_THRESHOLD) {
+	      shiftWeeks(wheelDeltaForMonth > 0 ? 1 : -1);
+	      wheelDeltaForMonth = 0;
+	      lastWheelMonthChangedAt = now;
+	    }
+	    e.preventDefault();
+	  }
+	  function startCalendarDrag(e) {
+	    if (!e.target.closest('.calendar')) return;
+	    if (e.target.closest('.release-item, .more-link, button, a')) return;
+	    dragGesture = {
+	      pointerId: e.pointerId,
+	      startX: e.clientX,
+	      startY: e.clientY,
+	      currentX: e.clientX,
+	      currentY: e.clientY,
+	    };
+	    e.currentTarget.setPointerCapture?.(e.pointerId);
+	  }
+	  function trackCalendarDrag(e) {
+	    if (!dragGesture || dragGesture.pointerId !== e.pointerId) return;
+	    dragGesture.currentX = e.clientX;
+	    dragGesture.currentY = e.clientY;
+	  }
+	  function finishCalendarDrag(e) {
+	    if (!dragGesture || dragGesture.pointerId !== e.pointerId) return;
+	    const dx = e.clientX - dragGesture.startX;
+	    const dy = e.clientY - dragGesture.startY;
+	    cancelCalendarDrag(e);
+	    if (Math.abs(dx) < MONTH_DRAG_THRESHOLD || Math.abs(dx) < Math.abs(dy) * 1.2) return;
+	    shiftWeeks(dx < 0 ? 1 : -1);
+	  }
+	  function cancelCalendarDrag(e) {
+	    if (dragGesture && e?.currentTarget?.releasePointerCapture) {
+	      try { e.currentTarget.releasePointerCapture(dragGesture.pointerId); } catch {}
+	    }
+	    dragGesture = null;
+	  }
+
+	  // ===== API 호출 & 렌더 =====
+	  async function load() {
+	    const requestId = ++loadSequence;
+	    const range = visibleCalendarRange();
+	    const from = isoDate(range.start), to = isoDate(range.end);
+
+	    if (!content.querySelector('.calendar')) {
+	      content.innerHTML = `<div class="status">로딩 중…</div>`;
+	    }
+	    const params = new URLSearchParams({ from, to });
+	    if (selectedGroups.size > 0) params.set('platformGroup', [...selectedGroups].join(','));
+
+	    try {
+	      const res = await fetch(`/api/releases?${params}`);
+	      if (requestId !== loadSequence) return;
+	      if (!res.ok) {
+	        content.innerHTML = `<div class="status error">조회 실패 (${res.status})<br><small>${escapeHtml(await res.text())}</small></div>`;
+	        return;
+      }
+	      const data = await res.json();
+	      renderCalendar(data.releases || []);
+	    } catch (e) {
+	      if (requestId !== loadSequence) return;
+	      content.innerHTML = `<div class="status error">네트워크 오류: ${escapeHtml(e.message)}</div>`;
+	    }
+	  }
+
+  function renderCalendar(releases) {
+    // (gameId + date) dedupe
+    const seen = new Set();
+    const items = [];
+    for (const r of releases) {
+      const key = `${r.gameId}@${r.date}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      items.push(r);
+    }
+
+    // 날짜별 그룹핑
+    const byDate = new Map();
+	    for (const r of items) {
+	      if (!byDate.has(r.date)) byDate.set(r.date, []);
+	      byDate.get(r.date).push(r);
+	    }
+	    for (const dayItems of byDate.values()) {
+	      dayItems.sort(compareReleasePopularity);
+	    }
+
+	    // 그리드 채우기: macOS 캘린더처럼 보이는 범위를 1주씩 밀 수 있게 고정 6주를 렌더링한다.
+	    const range = visibleCalendarRange();
+	    const totalCells = CALENDAR_VISIBLE_WEEKS * 7;
+
+    const today = new Date();
+    const isToday = (y, m, d) =>
+      y === today.getFullYear() && m === today.getMonth() && d === today.getDate();
+
+    const dowHeader = ['일', '월', '화', '수', '목', '금', '토']
+      .map((w, i) => `<div class="dow ${i === 0 ? 'sun' : i === 6 ? 'sat' : ''}">${w}</div>`)
+      .join('');
+
+	    const cells = [];
+	    for (let i = 0; i < totalCells; i++) {
+	      const cellDate = addDays(range.start, i);
+	      const outside = cellDate.getMonth() !== viewMonth;
+      const iso = isoDate(cellDate);
+      const dow = cellDate.getDay();
+      const todayCls = !outside && isToday(cellDate.getFullYear(), cellDate.getMonth(), cellDate.getDate()) ? 'today' : '';
+      const dayNumCls = dow === 0 ? 'sun' : dow === 6 ? 'sat' : '';
+
+	      const dayReleases = byDate.get(iso) || [];
+	      const expanded = expandedDates.has(iso);
+	      const visibleReleases = expanded ? dayReleases : dayReleases.slice(0, INITIAL_VISIBLE_RELEASES_PER_DAY);
+	      const hiddenCount = expanded ? 0 : Math.max(dayReleases.length - INITIAL_VISIBLE_RELEASES_PER_DAY, 0);
+	      const moreHtml = hiddenCount > 0
+	        ? `<button type="button" class="more-link" data-date="${iso}" title="${escapeAttr(`${iso} 나머지 ${hiddenCount}개 펼치기`)}">+${hiddenCount}</button>`
+	        : '';
+	      const itemsHtml = visibleReleases.map(renderReleaseItem).join('') + moreHtml;
+
+      cells.push(`
+        <div class="cell ${outside ? 'outside' : ''} ${todayCls}">
+          <div class="day-num ${dayNumCls}">${cellDate.getDate()}</div>
+          <div class="cell-items">${itemsHtml}</div>
+        </div>
+      `);
+    }
+
+    const totalCount = items.length;
+	    content.innerHTML = `
+	      <div style="font-size:13px;color:#9aa0a6;margin-bottom:12px;">
+	        총 ${totalCount}개 출시
+	      </div>
+      <div class="calendar">
+        ${dowHeader}
+        ${cells.join('')}
+      </div>
+	    `;
+
+	    document.querySelectorAll('.release-item[data-game-id]').forEach(el => {
+	      el.addEventListener('click', () => {
+	        openDetail(Number(el.dataset.gameId), {
+	          hypes: parseOptionalInt(el.dataset.hypes),
+	          follows: parseOptionalInt(el.dataset.follows),
+	        });
+	      });
+	    });
+	    document.querySelectorAll('.more-link[data-date]').forEach(el => {
+	      el.addEventListener('click', () => {
+	        expandedDates.add(el.dataset.date);
+	        renderCalendar(items);
+	      });
+	    });
+	  }
+	
+	  function renderReleaseItem(r) {
+	    const hasKr = r.koreanLanguageSupport ? 'has-kr' : '';
+	    const platforms = (r.platforms || [])
+	      .map(p => p.abbreviation || p.name)
+	      .filter(Boolean)
+	      .slice(0, 3)
+	      .join(', ');
+	    const platTxt = platforms ? `<span class="platforms">· ${escapeHtml(platforms)}</span>` : '';
+	    const krBadge = hasKoreanSupport(r) ? '<span class="release-badge kr">한글</span>' : '';
+	    const title = [
+	      r.title,
+	      hasKoreanSupport(r) ? '한글 제공' : '한글 미제공',
+	      platforms,
+	    ].filter(Boolean).join(' · ');
+	    return `<div class="release-item ${hasKr}" data-game-id="${r.gameId}" data-hypes="${escapeAttr(dataValue(r.hypes))}" data-follows="${escapeAttr(dataValue(r.follows))}" title="${escapeAttr(title)}">${escapeHtml(r.title)}${krBadge}${platTxt}</div>`;
+	  }
+
+  // ===== 상세 모달 =====
+  const backdrop = $('modal-backdrop');
+  const modalBody = $('modal-body');
+  $('modal-close').addEventListener('click', closeDetail);
+  backdrop.addEventListener('click', (e) => { if (e.target === backdrop) closeDetail(); });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeDetail(); });
+
+	  async function openDetail(gameId, popularity) {
+	    modalBody.innerHTML = `<div class="status">불러오는 중…</div>`;
+	    backdrop.classList.add('open');
+	    try {
+      const res = await fetch(`/api/games/${gameId}`);
+      if (!res.ok) {
+	        modalBody.innerHTML = `<div class="status error">조회 실패 (${res.status})</div>`;
+	        return;
+	      }
+	      renderDetail(await res.json(), popularity);
+	    } catch (e) {
+	      modalBody.innerHTML = `<div class="status error">오류: ${escapeHtml(e.message)}</div>`;
+	    }
+	  }
+	  function closeDetail() { backdrop.classList.remove('open'); }
+
+	  function renderDetail(g, popularity = {}) {
+	    const platforms = (g.platforms || []).map(p =>
+	      `<span class="platform-tag">${escapeHtml(p.name || p.abbreviation || '?')}</span>`
+	    ).join(' ') || '—';
+    const genres = (g.genres || []).map(x => x.name).filter(Boolean).join(', ') || '—';
+    const devs = (g.developers || []).map(x => x.name).filter(Boolean).join(', ') || '—';
+    const kr = g.koreanLanguageSupport
+      ? `<span class="kr-badge">🇰🇷 ${krLabel(g.koreanLanguageSupport)}</span>`
+      : '<span style="color:#9aa0a6;">정보 없음</span>';
+
+    const websites = (g.websites || []).map(w => {
+      const label = w.type?.type || urlHost(w.url);
+      return `<a class="link" href="${escapeAttr(w.url)}" target="_blank" rel="noopener">${escapeHtml(label)}</a>`;
+    }).join('');
+
+	    modalBody.innerHTML = `
+	      <h2 class="detail-title">${escapeHtml(g.title)}</h2>
+	      <div class="detail-default">${escapeHtml(g.defaultTitle || '')}</div>
+	      <div class="popularity-stats">
+	        <div class="popularity-stat"><span>Hype</span><strong>${escapeHtml(formatFullDebugCount(popularity.hypes))}</strong></div>
+	        <div class="popularity-stat"><span>Follow</span><strong>${escapeHtml(formatFullDebugCount(popularity.follows))}</strong></div>
+	      </div>
+	      <dl class="detail-meta">
+	        <dt>출시일</dt><dd>${escapeHtml(g.firstReleaseDate || '—')}</dd>
+        <dt>타입</dt><dd>${escapeHtml(g.gameType?.type || '—')}</dd>
+        <dt>상태</dt><dd>${escapeHtml(g.gameStatus?.status || '—')}</dd>
+        <dt>장르</dt><dd>${escapeHtml(genres)}</dd>
+	        <dt>개발사</dt><dd>${escapeHtml(devs)}</dd>
+	        <dt>플랫폼</dt><dd>${platforms}</dd>
+	        <dt>한국어</dt><dd>${kr}</dd>
+	      </dl>
+	      ${g.summary ? `<div class="section"><h3>요약</h3><div class="summary">${escapeHtml(g.summary)}</div></div>` : ''}
+      ${websites ? `<div class="section"><h3>관련 링크</h3><div class="links">${websites}</div></div>` : ''}
+    `;
+  }
+
+  // ===== 유틸 =====
+	  function isoDate(d) {
+	    return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+	  }
+	  function pad(n) { return String(n).padStart(2, '0'); }
+	  function visibleCalendarRange() {
+	    return {
+	      start: new Date(viewStartDate),
+	      end: addDays(viewStartDate, CALENDAR_VISIBLE_WEEKS * 7 - 1),
+	    };
+	  }
+	  function startOfWeek(d) {
+	    return addDays(d, -d.getDay());
+	  }
+	  function addDays(d, days) {
+	    const result = new Date(d);
+	    result.setDate(result.getDate() + days);
+	    return result;
+	  }
+	  function krLabel(s) {
+	    const parts = [];
+	    if (s.audio) parts.push('음성');
+	    if (s.subtitles) parts.push('자막');
+	    if (s.interface) parts.push('UI');
+	    return parts.length ? parts.join('/') : '지원';
+	  }
+	  function compareReleasePopularity(a, b) {
+	    const hypeDiff = popularityScore(b.hypes) - popularityScore(a.hypes);
+	    if (hypeDiff !== 0) return hypeDiff;
+	    const followDiff = popularityScore(b.follows) - popularityScore(a.follows);
+	    if (followDiff !== 0) return followDiff;
+	    const koreanSupportDiff = Number(hasKoreanSupport(b)) - Number(hasKoreanSupport(a));
+	    if (koreanSupportDiff !== 0) return koreanSupportDiff;
+	    const titleDiff = String(a.title || '').localeCompare(String(b.title || ''), 'ko');
+	    return titleDiff || popularityScore(a.gameId) - popularityScore(b.gameId);
+	  }
+	  function hasKoreanSupport(release) {
+	    return Boolean(release.koreanLanguageSupport);
+	  }
+	  function popularityScore(value) {
+	    const n = Number(value);
+	    return Number.isFinite(n) ? n : 0;
+	  }
+	  function parseOptionalInt(value) {
+	    if (value === null || value === undefined || value === '') return null;
+	    const n = Number(value);
+	    return Number.isFinite(n) ? n : null;
+	  }
+	  function dataValue(value) {
+	    return value === null || value === undefined ? '' : String(value);
+	  }
+	  function formatFullDebugCount(value) {
+	    const n = Number(value);
+	    return Number.isFinite(n) ? n.toLocaleString('ko-KR') : '-';
+	  }
+	  function urlHost(url) {
+	    try { return new URL(url).host.replace(/^www\./, ''); }
+    catch { return url; }
+  }
+  function escapeHtml(s) {
+    return String(s ?? '').replace(/[&<>"']/g, ch => ({
+      '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+    }[ch]));
+  }
+  function escapeAttr(s) { return escapeHtml(s); }
+
+  // ===== 초기 로드 =====
+  setMonth(new Date());
+  load();
+</script>
+
+</body>
+</html>

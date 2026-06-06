@@ -41,19 +41,18 @@ class ServiceApiJdbcRepositoryIntegrationTest {
     }
 
     @Test
-    fun `release query uses fixed codes for korea fallback and korean metadata`() {
+    fun `release query exposes releases with korean metadata`() {
+        // service ETL이 region∈{KOREA, GLOBAL}, status≠CANCELLED, 한국판 우선 fallback 등
+        // 필터를 이미 적용한 뒤 service.game_release에 적재하므로,
+        // 여기서는 ETL이 실제로 적재할 수 있는 row만 시드한다.
         seedGame()
+        // out of query range
         jdbc.update(
             "INSERT INTO service.game_release (id, game_id, platform_id, region_id, status_id, release_date) VALUES (100, 10, 6, 9, 6, TIMESTAMPTZ '2026-05-10 00:00:00+00')",
         )
-        jdbc.update(
-            "INSERT INTO service.game_release (id, game_id, platform_id, region_id, status_id, release_date) VALUES (101, 10, 6, 8, 6, TIMESTAMPTZ '2026-06-01 00:00:00+00')",
-        )
+        // in range: PS5 글로벌 (같은 platform에 한국 release가 없으면 ETL이 글로벌을 적재)
         jdbc.update(
             "INSERT INTO service.game_release (id, game_id, platform_id, region_id, status_id, release_date) VALUES (102, 10, 167, 8, 6, TIMESTAMPTZ '2026-06-01 00:00:00+00')",
-        )
-        jdbc.update(
-            "INSERT INTO service.game_release (id, game_id, platform_id, region_id, status_id, release_date) VALUES (103, 10, 130, 9, 5, TIMESTAMPTZ '2026-06-01 00:00:00+00')",
         )
 
         val releases = repository.findReleases(
@@ -68,6 +67,8 @@ class ServiceApiJdbcRepositoryIntegrationTest {
         assertEquals(8L, releases.single().region?.id)
         assertEquals(listOf(167L), releases.single().platforms.map { it.id })
         assertEquals(true, releases.single().koreanLanguageSupport?.subtitles)
+        assertEquals(25, releases.single().hypes)
+        assertEquals(120, releases.single().follows)
     }
 
     @Test
@@ -97,7 +98,7 @@ class ServiceApiJdbcRepositoryIntegrationTest {
 
     private fun seedGame() {
         jdbc.update(
-            "INSERT INTO service.game (id, slug, name, summary, first_release_date, type_id, status_id) VALUES (10, 'default-game', 'Default Game', 'Summary', TIMESTAMPTZ '2026-05-10 00:00:00+00', 1, 1)",
+            "INSERT INTO service.game (id, slug, name, summary, first_release_date, type_id, status_id, hypes, follows) VALUES (10, 'default-game', 'Default Game', 'Summary', TIMESTAMPTZ '2026-05-10 00:00:00+00', 1, 1, 25, 120)",
         )
         jdbc.update("INSERT INTO service.game_localization (id, game_id, region_id, name) VALUES (200, 10, 2, '한국어 제목')")
         jdbc.update("INSERT INTO service.cover (id, game_id, game_localization_id, image_id, url, is_main) VALUES (300, 10, 200, 'co-kr', NULL, FALSE)")
@@ -125,7 +126,7 @@ class ServiceApiJdbcRepositoryIntegrationTest {
         executeAll(
             "DROP SCHEMA IF EXISTS service CASCADE",
             "CREATE SCHEMA service",
-            "CREATE TABLE service.game (id BIGINT PRIMARY KEY, slug TEXT, name TEXT, summary TEXT, first_release_date TIMESTAMPTZ, type_id BIGINT, status_id BIGINT)",
+            "CREATE TABLE service.game (id BIGINT PRIMARY KEY, slug TEXT, name TEXT, summary TEXT, first_release_date TIMESTAMPTZ, type_id BIGINT, status_id BIGINT, hypes INTEGER, follows INTEGER)",
             "CREATE TABLE service.game_type (id BIGINT PRIMARY KEY, type TEXT)",
             "CREATE TABLE service.game_status (id BIGINT PRIMARY KEY, status TEXT)",
             "CREATE TABLE service.release_region (id BIGINT PRIMARY KEY, name TEXT)",

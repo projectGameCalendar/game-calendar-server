@@ -35,14 +35,15 @@ class ServiceApiJdbcRepository(
         endExclusive: Instant,
         platformIds: Set<Long>,
     ): List<ReleaseItemResponse> {
+        // service ETL이 region∈{KOREA, GLOBAL}, status≠CANCELLED, platform∈servicePlatformIds,
+        // 한국판 우선 fallback(같은 game/platform에 한국 row가 있으면 글로벌 row 제외)을 이미 적용한 뒤
+        // service.game_release에 적재한다 (IngestEtlReadJdbcRepository.serviceReleaseDatePredicate).
+        // 여기서 같은 필터를 다시 적용할 필요 없음.
         val params = MapSqlParameterSource()
             .addValue("startInclusive", Timestamp.from(startInclusive))
             .addValue("endExclusive", Timestamp.from(endExclusive))
-            .addValue("koreaReleaseRegionId", KOREA_RELEASE_REGION_ID)
-            .addValue("globalReleaseRegionId", GLOBAL_RELEASE_REGION_ID)
             .addValue("koreaLocalizationRegionId", KOREA_LOCALIZATION_REGION_ID)
             .addValue("koreanLanguageId", KOREAN_LANGUAGE_ID)
-            .addValue("cancelledReleaseStatusId", CANCELLED_RELEASE_STATUS_ID)
 
         val platformFilterSql = if (platformIds.isEmpty()) {
             ""
@@ -65,6 +66,8 @@ class ServiceApiJdbcRepository(
                 rr.name AS region_name,
                 rs.id AS release_status_id,
                 rs.name AS release_status_name,
+                g.hypes,
+                g.follows,
                 COALESCE(
                     JSONB_AGG(
                         DISTINCT JSONB_BUILD_OBJECT(
@@ -111,22 +114,7 @@ class ServiceApiJdbcRepository(
                 ) cover ON TRUE
             WHERE gr.release_date >= :startInclusive
               AND gr.release_date < :endExclusive
-              AND NULLIF(BTRIM(g.name), '') IS NOT NULL
-              AND gr.region_id IN (:koreaReleaseRegionId, :globalReleaseRegionId)
-              AND gr.status_id IS DISTINCT FROM :cancelledReleaseStatusId
               $platformFilterSql
-              AND (
-                  gr.region_id = :koreaReleaseRegionId
-                  OR NOT EXISTS (
-                      SELECT 1
-                      FROM service.game_release kr
-                      WHERE kr.game_id = gr.game_id
-                        AND kr.platform_id IS NOT DISTINCT FROM gr.platform_id
-                        AND kr.release_date IS NOT NULL
-                        AND kr.region_id = :koreaReleaseRegionId
-                        AND kr.status_id IS DISTINCT FROM :cancelledReleaseStatusId
-                  )
-              )
             GROUP BY
                 gr.game_id,
                 (gr.release_date AT TIME ZONE 'Asia/Seoul')::date,
@@ -138,6 +126,8 @@ class ServiceApiJdbcRepository(
                 rr.name,
                 rs.id,
                 rs.name,
+                g.hypes,
+                g.follows,
                 cover.image_id,
                 cover.url
             ORDER BY release_date, title, MIN(gr.id)
@@ -208,30 +198,10 @@ class ServiceApiJdbcRepository(
                     '[]'::jsonb
                 ) AS items
                 FROM (
-                    SELECT DISTINCT ON (p.id)
-                        p.id,
-                        p.name,
-                        p.abbreviation,
-                        CASE WHEN gr.region_id = :koreaReleaseRegionId THEN 0 ELSE 1 END AS region_rank
+                    SELECT DISTINCT p.id, p.name, p.abbreviation
                     FROM service.game_release gr
                     JOIN service.platform p ON p.id = gr.platform_id
                     WHERE gr.game_id = g.id
-                      AND gr.release_date IS NOT NULL
-                      AND gr.region_id IN (:koreaReleaseRegionId, :globalReleaseRegionId)
-                      AND gr.status_id IS DISTINCT FROM :cancelledReleaseStatusId
-                      AND (
-                          gr.region_id = :koreaReleaseRegionId
-                          OR NOT EXISTS (
-                              SELECT 1
-                              FROM service.game_release kr
-                              WHERE kr.game_id = gr.game_id
-                                AND kr.platform_id IS NOT DISTINCT FROM gr.platform_id
-                                AND kr.release_date IS NOT NULL
-                                AND kr.region_id = :koreaReleaseRegionId
-                                AND kr.status_id IS DISTINCT FROM :cancelledReleaseStatusId
-                          )
-                      )
-                    ORDER BY p.id, region_rank
                 ) selected
             ) platforms ON TRUE
             LEFT JOIN LATERAL (
@@ -274,27 +244,20 @@ class ServiceApiJdbcRepository(
                 FROM service.website w
                 LEFT JOIN service.website_type wt ON wt.id = w.type_id
                 WHERE w.game_id = g.id
-                  AND w.is_trusted = TRUE
-                  AND NULLIF(BTRIM(w.url), '') IS NOT NULL
             ) websites ON TRUE
             LEFT JOIN LATERAL (
                 SELECT gv.id, gv.name, NULLIF(BTRIM(gv.video_id), '') AS video_key
                 FROM service.game_video gv
                 WHERE gv.game_id = g.id
-                  AND NULLIF(BTRIM(gv.video_id), '') IS NOT NULL
                 ORDER BY gv.id
                 LIMIT 1
             ) video ON TRUE
             WHERE g.id = :gameId
-              AND NULLIF(BTRIM(g.name), '') IS NOT NULL
             """.trimIndent(),
             MapSqlParameterSource()
                 .addValue("gameId", gameId)
-                .addValue("koreaReleaseRegionId", KOREA_RELEASE_REGION_ID)
-                .addValue("globalReleaseRegionId", GLOBAL_RELEASE_REGION_ID)
                 .addValue("koreaLocalizationRegionId", KOREA_LOCALIZATION_REGION_ID)
-                .addValue("koreanLanguageId", KOREAN_LANGUAGE_ID)
-                .addValue("cancelledReleaseStatusId", CANCELLED_RELEASE_STATUS_ID),
+                .addValue("koreanLanguageId", KOREAN_LANGUAGE_ID),
             ResultSetExtractor { rs -> if (rs.next()) rs.toGameDetail() else null },
         )
 
@@ -321,6 +284,8 @@ class ServiceApiJdbcRepository(
                 size = IGDB_COVER_THUMBNAIL_SIZE,
             ),
             koreanLanguageSupport = getKoreanLanguageSupport(),
+            hypes = getNullableInt("hypes"),
+            follows = getNullableInt("follows"),
         )
 
     private fun ResultSet.toGameDetail(): GameDetailResponse {
@@ -380,6 +345,11 @@ class ServiceApiJdbcRepository(
         return value.takeIf { !wasNull() }
     }
 
+    private fun ResultSet.getNullableInt(columnName: String): Int? {
+        val value = getInt(columnName)
+        return value.takeIf { !wasNull() }
+    }
+
     private fun ResultSet.getLongList(columnName: String): List<Long> =
         getArray(columnName)?.toLongList().orEmpty()
 
@@ -408,11 +378,8 @@ class ServiceApiJdbcRepository(
         this?.trim()?.takeIf { it.isNotEmpty() }
 
     private companion object {
-        private const val KOREA_RELEASE_REGION_ID = 9L
-        private const val GLOBAL_RELEASE_REGION_ID = 8L
         private const val KOREA_LOCALIZATION_REGION_ID = 2L
         private const val KOREAN_LANGUAGE_ID = 17L
-        private const val CANCELLED_RELEASE_STATUS_ID = 5L
         private const val IGDB_COVER_THUMBNAIL_SIZE = "t_cover_small"
         private const val IGDB_COVER_SIZE = "t_cover_big"
     }

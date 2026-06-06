@@ -29,6 +29,8 @@ data class ReleaseItemResponse(
     val platforms: List<PlatformResponse>,
     val coverThumbnailUrl: String?,
     val koreanLanguageSupport: KoreanLanguageSupportResponse?,
+    val hypes: Int? = null,
+    val follows: Int? = null,
 )
 
 data class GameDetailResponse(
