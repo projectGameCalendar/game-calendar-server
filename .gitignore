@@ -49,3 +49,4 @@ src/main/resources/application.yml
 AGENT.md
 CLAUDE.md
 GEMINI.md
+.gradle-codex

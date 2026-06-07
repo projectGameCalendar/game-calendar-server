@@ -43,7 +43,7 @@ class IgdbClient(
         """.trimIndent()
 
         private val RELEASE_DATE_FIELDS =
-            "id, game, platform, region, status, date, y, m, human, checksum, updated_at"
+            "id, game, platform, release_region, status, date, y, m, human, checksum, updated_at"
 
         private val PLATFORM_FIELDS =
             "id, name, abbreviation, alternative_name, platform_logo, platform_type, checksum, updated_at"

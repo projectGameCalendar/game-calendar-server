@@ -2,6 +2,15 @@ spring:
   application:
     name: projectgc
 
+  # 개발 중에는 src 정적 리소스를 먼저 서빙해 HTML/CSS/JS 수정 후 브라우저 새로고침만으로 반영합니다.
+  web:
+    resources:
+      cache:
+        period: 0
+      static-locations:
+        - file:src/main/resources/static/
+        - classpath:/static/
+
   datasource:
     url: jdbc:postgresql://localhost:5678/postgres
     username: {YOUR_DB_USER}

@@ -37,11 +37,12 @@ ProjectGC는 Kotlin과 Spring Boot로 구축한 게임 출시 캘린더 웹 서�
 - 애플리케이션 실행: `./gradlew bootRun`
 
 
-## API 스켈레톤
-- `GET /api/releases/upcoming` — 출시 예정 목록 (서비스 로직 구현 예정)
-- `GET /api/releases/recent` — 최근 출시 목록 (서비스 로직 구현 예정)
+## Service API
+- `GET /api/releases?from=YYYY-MM-DD&to=YYYY-MM-DD` — 출시 일정 범위 조회
+- `GET /api/releases?date=YYYY-MM-DD` — 단일 날짜 출시 일정 조회
+- `GET /api/games/{gameId}` — 게임 상세 조회
 
-현재 두 엔드포인트는 서비스 계층에서 `NotImplementedError`를 던지도록 되어 있으므로 실제 데이터는 응답하지 않습니다.
+`GET /api/releases`는 `platformGroup=PC,NINTENDO` 또는 반복 파라미터 형식의 플랫폼 그룹 필터를 지원합니다.
 
 
 ## 문제 해결 가이드
