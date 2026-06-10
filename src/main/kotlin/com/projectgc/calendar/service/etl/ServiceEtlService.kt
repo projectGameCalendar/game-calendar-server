@@ -131,18 +131,21 @@ class ServiceEtlService(
         preparedSlice2Inputs: PreparedSlice2Inputs,
         preparedAffectedGameInputs: PreparedAffectedGameIdInputs,
     ): Int {
+        // 입력 스냅샷이 불변이므로 id Set 묶음(수만 건 company 포함)은 1회만 계산해 전 단계가 공유한다
+        val slice2IdSets = preparedSlice2Inputs.idSets()
         var attempt = 1
         while (true) {
             try {
                 var affectedGameCount = 0
                 transactionTemplate.executeWithoutResult {
-                    syncSlice2Sources(runId, preparedSlice2Inputs)
+                    syncSlice2Sources(runId, preparedSlice2Inputs, slice2IdSets)
                     val calculationResult = affectedGameIdCalculator.calculate(preparedAffectedGameInputs)
                     affectedGameCount = rebuildAndValidate(
                         runId = runId,
                         preparedSlice2Inputs = preparedSlice2Inputs,
                         preparedAffectedGameInputs = preparedAffectedGameInputs,
                         calculationResult = calculationResult,
+                        slice2IdSets = slice2IdSets,
                     )
                 }
                 return affectedGameCount
@@ -158,8 +161,7 @@ class ServiceEtlService(
         }
     }
 
-    private fun syncSlice2Sources(runId: UUID, inputs: PreparedSlice2Inputs) {
-        val idSets = inputs.idSets()
+    private fun syncSlice2Sources(runId: UUID, inputs: PreparedSlice2Inputs, idSets: PreparedSlice2IdSets) {
         syncSourceTable(runId, "game_status", inputs.gameStatuses, serviceEtlJdbcRepository::syncGameStatuses)
         syncSourceTable(runId, "game_type", inputs.gameTypes, serviceEtlJdbcRepository::syncGameTypes)
         syncSourceTable(runId, "language", inputs.languages, serviceEtlJdbcRepository::syncLanguages)
@@ -200,10 +202,10 @@ class ServiceEtlService(
         preparedSlice2Inputs: PreparedSlice2Inputs,
         preparedAffectedGameInputs: PreparedAffectedGameIdInputs,
         calculationResult: AffectedGameIdCalculationResult,
+        slice2IdSets: PreparedSlice2IdSets,
     ): Int {
-        val slice2IdSets = preparedSlice2Inputs.idSets()
         val dimensionDeletionAffectedGameIds = findSharedDimensionDeletionAffectedGameIds(
-            preparedSlice2Inputs = preparedSlice2Inputs,
+            idSets = slice2IdSets,
             sourceGameIds = preparedAffectedGameInputs.allGameIds,
             currentRows = calculationResult.currentRows,
         )
@@ -226,6 +228,7 @@ class ServiceEtlService(
             preparedSlice2Inputs = preparedSlice2Inputs,
             preparedAffectedGameInputs = preparedAffectedGameInputs,
             validationGameIds = validationGameIds,
+            slice2IdSets = slice2IdSets,
         )
         if (validationResult.mismatchCount > 0) {
             throw ServiceEtlValidationException(
@@ -272,11 +275,10 @@ class ServiceEtlService(
 
     // currentRows: calculate가 같은 트랜잭션에서 로드한 스냅샷 — 사이에 게임 프로젝션 쓰기가 없어 재로드 불필요
     private fun findSharedDimensionDeletionAffectedGameIds(
-        preparedSlice2Inputs: PreparedSlice2Inputs,
+        idSets: PreparedSlice2IdSets,
         sourceGameIds: Set<Long>,
         currentRows: CurrentServiceProjectionRows,
     ): Set<Long> {
-        val idSets = preparedSlice2Inputs.idSets()
         val affectedGameIds = linkedSetOf<Long>()
 
         currentRows.gameRows.forEach { row ->
@@ -361,12 +363,13 @@ class ServiceEtlService(
         preparedSlice2Inputs: PreparedSlice2Inputs,
         preparedAffectedGameInputs: PreparedAffectedGameIdInputs,
         validationGameIds: Set<Long>,
+        slice2IdSets: PreparedSlice2IdSets,
     ): ServiceEtlValidationResult {
         val accumulator = ValidationAccumulator()
 
         validateSlice2Dimensions(preparedSlice2Inputs, accumulator)
         validateGameProjections(
-            preparedSlice2Inputs = preparedSlice2Inputs,
+            idSets = slice2IdSets,
             preparedAffectedGameInputs = preparedAffectedGameInputs,
             validationGameIds = validationGameIds,
             accumulator = accumulator,
@@ -488,13 +491,12 @@ class ServiceEtlService(
     }
 
     private fun validateGameProjections(
-        preparedSlice2Inputs: PreparedSlice2Inputs,
+        idSets: PreparedSlice2IdSets,
         preparedAffectedGameInputs: PreparedAffectedGameIdInputs,
         validationGameIds: Set<Long>,
         accumulator: ValidationAccumulator,
     ) {
         val allGameIds = preparedAffectedGameInputs.allGameIds
-        val idSets = preparedSlice2Inputs.idSets()
 
         val expectedGameRows = resolveGameReferences(
             rows = preparedAffectedGameInputs.gameRows,
@@ -719,9 +721,11 @@ class ServiceEtlService(
         val sourceGameRows = preparedInputs.gameRows.filterGameRowsByGameIds(requestedGameIds)
         val materializedGameIds = sourceGameRows.mapTo(linkedSetOf()) { it.id }
 
+        val materializedLocalizationRows =
+            preparedInputs.gameLocalizationRows.filterLocalizationRowsByGameIds(materializedGameIds)
         serviceEtlJdbcRepository.rebuildCoreGameProjections(
             gameRows = sourceGameRows,
-            gameLocalizationRows = preparedInputs.gameLocalizationRows.filterLocalizationRowsByGameIds(materializedGameIds),
+            gameLocalizationRows = materializedLocalizationRows,
             gameReleaseRows = preparedInputs.gameReleaseRows.filterReleaseRowsByGameIds(materializedGameIds),
             availableStatusIds = slice2IdSets.gameStatusIds,
             availableTypeIds = slice2IdSets.gameTypeIds,
@@ -733,7 +737,7 @@ class ServiceEtlService(
         val availableServiceGameIds = serviceEtlJdbcRepository.loadIds("service.game")
             .intersect(preparedInputs.allGameIds)
         val resolvedGameLocalizations = resolveGameLocalizationReferences(
-            rows = preparedInputs.gameLocalizationRows.filterLocalizationRowsByGameIds(materializedGameIds),
+            rows = materializedLocalizationRows,
             availableGameIds = availableServiceGameIds,
             availableRegionIds = slice2IdSets.regionIds,
         )
