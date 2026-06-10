@@ -74,7 +74,7 @@ class ServiceEtlService(
 
         try {
             val preparedSlice2Inputs = prepareSlice2Inputs()
-            val preparedAffectedGameInputs = affectedGameIdCalculator.prepare(startedAt.epochSecond)
+            val preparedAffectedGameInputs = affectedGameIdCalculator.prepare()
             val affectedGameCount = executeWithRetry(
                 runId = runId,
                 preparedSlice2Inputs = preparedSlice2Inputs,
@@ -770,21 +770,15 @@ class ServiceEtlService(
         )
         calculationResult.sourceResults.forEach { sourceResult ->
             val loggedAt = Instant.now()
-            if (sourceResult.advanceCursor && sourceResult.cursorTo != null && sourceResult.cursorTo != sourceResult.cursorFrom) {
-                serviceEtlJdbcRepository.upsertCursor(
-                    tableName = sourceResult.tableName,
-                    lastSyncedAt = sourceResult.cursorTo,
-                    syncedAt = loggedAt,
-                )
-            }
             serviceEtlJdbcRepository.insertSourceLog(
                 ServiceEtlSourceLogEntry(
                     runId = runId,
                     tableName = sourceResult.tableName,
                     status = COMPLETED,
                     processedRows = sourceResult.affectedGameIds.size,
-                    cursorFrom = sourceResult.cursorFrom,
-                    cursorTo = sourceResult.cursorTo,
+                    // diff 기반 전체 비교 방식이라 커서를 사용하지 않음 — 로그 스키마 호환을 위해 null 기록
+                    cursorFrom = null,
+                    cursorTo = null,
                     note = "${sourceResult.note}; $SLICE7_GAME_PROJECTION_NOTE",
                     startedAt = loggedAt,
                     finishedAt = loggedAt,

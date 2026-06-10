@@ -61,7 +61,7 @@ class ServiceEtlJdbcRepositoryIntegrationTest {
         serviceJdbc.update("INSERT INTO service.game (id, name) VALUES (2, 'Related Game')")
         serviceJdbc.update("INSERT INTO service.game_relation (game_id, related_game_id, relation_type) VALUES (1, 2, 'SIMILAR')")
 
-        val calculationResult = calculator.calculate(500L)
+        val calculationResult = calculator.calculate()
         val gameSourceResult = calculationResult.sourceResults.first { it.tableName == "game" }
 
         assertTrue(1L in gameSourceResult.affectedGameIds)
@@ -389,7 +389,6 @@ class ServiceEtlJdbcRepositoryIntegrationTest {
                 comment TEXT NULL
             )
             """.trimIndent(),
-            "CREATE TABLE service.etl_cursor (table_name TEXT PRIMARY KEY, last_synced_at BIGINT NOT NULL, synced_at TIMESTAMP NOT NULL)",
         )
     }
 

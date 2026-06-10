@@ -34,33 +34,6 @@ class IngestEtlReadJdbcRepository(
             """.trimIndent(),
         ) { rs, _ -> rs.getLong("id") }
 
-    fun findAffectedGameIdsFromGames(cursorFrom: Long): Set<Long> =
-        jdbc.query(
-            """
-            SELECT id
-            FROM ingest.game
-            WHERE updated_at > ?
-            ORDER BY id
-            """.trimIndent(),
-            { rs, _ -> rs.getLong("id") },
-            cursorFrom,
-        ).toCollection(linkedSetOf())
-
-    fun findAffectedGameIdsFromReleaseDates(cursorFrom: Long): Set<Long> =
-        findDistinctGameIdsByUpdatedAt("release_date", cursorFrom)
-
-    fun findAffectedGameIdsFromInvolvedCompanies(cursorFrom: Long): Set<Long> =
-        findDistinctGameIdsByUpdatedAt("involved_company", cursorFrom)
-
-    fun findAffectedGameIdsFromLanguageSupports(cursorFrom: Long): Set<Long> =
-        findDistinctGameIdsByUpdatedAt("language_support", cursorFrom)
-
-    fun findAffectedGameIdsFromGameLocalizations(cursorFrom: Long): Set<Long> =
-        findDistinctGameIdsByUpdatedAt("game_localization", cursorFrom)
-
-    fun findAffectedGameIdsFromGameUpdatedAt(cursorFrom: Long): Set<Long> =
-        findAffectedGameIdsFromGames(cursorFrom)
-
     fun loadServiceGameStatuses(): List<NamedDimensionRow> =
         loadNamedDimensionRowsByCandidateGameColumn(
             sourceTable = "game_status",
@@ -370,24 +343,11 @@ class IngestEtlReadJdbcRepository(
             )
         }
 
-    private fun findDistinctGameIdsByUpdatedAt(tableName: String, cursorFrom: Long): Set<Long> =
-        jdbc.query(
-            """
-            SELECT DISTINCT game
-            FROM ingest.$tableName
-            WHERE updated_at > ?
-              AND game IS NOT NULL
-            ORDER BY game
-            """.trimIndent(),
-            { rs, _ -> rs.getLong("game") },
-            cursorFrom,
-        ).toCollection(linkedSetOf())
-
     private fun loadGameLanguageProjectionRowsInternal(
-        gameIds: Set<Long>?,
+        gameIds: Set<Long>,
         languageFilter: String? = null,
     ): List<GameLanguageProjectionRow> =
-        queryByOptionalGameIds(
+        queryByGameIdChunks(
             gameIds = gameIds,
             sqlBuilder = { filterClause ->
                 val languageFilterClause = languageFilter?.let { "AND $it" }.orEmpty()
@@ -422,10 +382,10 @@ class IngestEtlReadJdbcRepository(
         }
 
     private fun loadGameArrayProjectionRowsInternal(
-        gameIds: Set<Long>?,
+        gameIds: Set<Long>,
         sourceColumn: String,
     ): List<GameDimensionProjectionRow> =
-        queryByOptionalGameIds(
+        queryByGameIdChunks(
             gameIds = gameIds,
             filterColumn = "id",
             sqlBuilder = { filterClause ->
@@ -453,10 +413,10 @@ class IngestEtlReadJdbcRepository(
         }
 
     private fun loadGameCompanyProjectionRowsInternal(
-        gameIds: Set<Long>?,
+        gameIds: Set<Long>,
         developerOnly: Boolean = false,
     ): List<GameCompanyProjectionRow> =
-        queryByOptionalGameIds(
+        queryByGameIdChunks(
             gameIds = gameIds,
             sqlBuilder = { filterClause ->
                 val developerFilterClause = if (developerOnly) {
@@ -495,8 +455,8 @@ class IngestEtlReadJdbcRepository(
             )
         }
 
-    private fun loadGameRelationProjectionRowsInternal(gameIds: Set<Long>?): List<GameRelationProjectionRow> =
-        queryByOptionalGameIds(
+    private fun loadGameRelationProjectionRowsInternal(gameIds: Set<Long>): List<GameRelationProjectionRow> =
+        queryByGameIdChunks(
             gameIds = gameIds,
             filterColumn = "id",
             sqlBuilder = { filterClause ->
@@ -551,9 +511,10 @@ class IngestEtlReadJdbcRepository(
             )
         }
 
-    private fun loadCoverProjectionRowsInternal(gameIds: Set<Long>?): List<CoverProjectionRow> =
-        if (gameIds == null) {
-            jdbc.query(
+    private fun loadCoverProjectionRowsInternal(gameIds: Set<Long>): List<CoverProjectionRow> =
+        queryByLongIdChunks(
+            ids = gameIds,
+            sqlBuilder = { placeholders ->
                 """
                 WITH cover_rows AS (
                     SELECT
@@ -569,42 +530,18 @@ class IngestEtlReadJdbcRepository(
                 )
                 SELECT id, game_id, game_localization_id, image_id, url, is_main
                 FROM cover_rows
-                WHERE game_id IS NOT NULL
+                WHERE game_id IN ($placeholders)
                 ORDER BY game_id, id
-                """.trimIndent(),
-            ) { rs, _ -> rs.toCoverProjectionRow() }
-        } else {
-            queryByLongIdChunks(
-                ids = gameIds,
-                sqlBuilder = { placeholders ->
-                    """
-                    WITH cover_rows AS (
-                        SELECT
-                            c.id,
-                            COALESCE(c.game, gl.game) AS game_id,
-                            c.game_localization AS game_localization_id,
-                            c.image_id,
-                            c.url,
-                            COALESCE(g.cover = c.id, FALSE) AS is_main
-                        FROM ingest.cover c
-                        LEFT JOIN ingest.game_localization gl ON gl.id = c.game_localization
-                        LEFT JOIN ingest.game g ON g.id = COALESCE(c.game, gl.game)
-                    )
-                    SELECT id, game_id, game_localization_id, image_id, url, is_main
-                    FROM cover_rows
-                    WHERE game_id IN ($placeholders)
-                    ORDER BY game_id, id
-                    """.trimIndent()
-                },
-                rowMapper = { rs, _ -> rs.toCoverProjectionRow() },
-            )
-        }
+                """.trimIndent()
+            },
+            rowMapper = { rs, _ -> rs.toCoverProjectionRow() },
+        )
 
     private fun loadGameVideoProjectionRowsInternal(
-        gameIds: Set<Long>?,
+        gameIds: Set<Long>,
         requireVideoId: Boolean = false,
     ): List<GameVideoProjectionRow> =
-        queryByOptionalGameIds(
+        queryByGameIdChunks(
             gameIds = gameIds,
             sqlBuilder = { filterClause ->
                 val videoIdFilterClause = if (requireVideoId) {
@@ -624,10 +561,10 @@ class IngestEtlReadJdbcRepository(
         ) { rs, _ -> rs.toGameVideoProjectionRow() }
 
     private fun loadWebsiteProjectionRowsInternal(
-        gameIds: Set<Long>?,
+        gameIds: Set<Long>,
         trustedOnly: Boolean = false,
     ): List<WebsiteProjectionRow> =
-        queryByOptionalGameIds(
+        queryByGameIdChunks(
             gameIds = gameIds,
             sqlBuilder = { filterClause ->
                 val trustedFilterClause = if (trustedOnly) {
@@ -769,21 +706,17 @@ class IngestEtlReadJdbcRepository(
             isTrusted = getBoolean("is_trusted"),
         )
 
-    private fun <T> queryByOptionalGameIds(
-        gameIds: Set<Long>?,
+    private fun <T> queryByGameIdChunks(
+        gameIds: Set<Long>,
         filterColumn: String = "game",
         sqlBuilder: (String) -> String,
         rowMapper: (ResultSet, Int) -> T,
     ): List<T> =
-        if (gameIds == null) {
-            jdbc.query(sqlBuilder(""), rowMapper)
-        } else {
-            queryByLongIdChunks(
-                ids = gameIds,
-                sqlBuilder = { placeholders -> sqlBuilder("AND $filterColumn IN ($placeholders)") },
-                rowMapper = rowMapper,
-            )
-        }
+        queryByLongIdChunks(
+            ids = gameIds,
+            sqlBuilder = { placeholders -> sqlBuilder("AND $filterColumn IN ($placeholders)") },
+            rowMapper = rowMapper,
+        )
 
     private fun <T> queryByLongIdChunks(
         ids: Set<Long>,

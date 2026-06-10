@@ -17,7 +17,6 @@ import com.projectgc.calendar.repository.etl.ServiceEtlTableSyncResult
 import com.projectgc.calendar.repository.etl.WebsiteProjectionRow
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
-import org.mockito.Mockito.anyLong
 import org.mockito.Mockito.doAnswer
 import org.mockito.Mockito.doThrow
 import org.mockito.Mockito.inOrder
@@ -76,7 +75,7 @@ class ServiceEtlServiceTest {
         )
         stubEmptySlice2Syncs()
         stubSlice7ValidationPass(emptyPreparedAffectedGameInputs())
-        `when`(affectedGameIdCalculator.prepare(anyLong())).thenReturn(emptyPreparedAffectedGameInputs())
+        `when`(affectedGameIdCalculator.prepare()).thenReturn(emptyPreparedAffectedGameInputs())
         `when`(affectedGameIdCalculator.calculate(anyObject(PreparedAffectedGameIdInputs::class.java)))
             .thenReturn(emptySlice7CalculationResult())
     }
@@ -85,7 +84,7 @@ class ServiceEtlServiceTest {
     fun `syncs slice2 sources, validates slice7 state, and completes`() {
         val preparedInputs = preparedAffectedGameInputs(linkedSetOf(101L, 102L))
         stubSlice7ValidationPass(preparedInputs)
-        `when`(affectedGameIdCalculator.prepare(anyLong())).thenReturn(preparedInputs)
+        `when`(affectedGameIdCalculator.prepare()).thenReturn(preparedInputs)
         `when`(affectedGameIdCalculator.calculate(anyObject(PreparedAffectedGameIdInputs::class.java))).thenReturn(
             slice7CalculationResult(
                 perTableGameIds = mapOf(
@@ -153,7 +152,7 @@ class ServiceEtlServiceTest {
         val rebuiltGameRows = mutableListOf<List<GameProjectionRow>>()
 
         stubSlice7ValidationPass(preparedInputs)
-        `when`(affectedGameIdCalculator.prepare(anyLong())).thenReturn(preparedInputs)
+        `when`(affectedGameIdCalculator.prepare()).thenReturn(preparedInputs)
         `when`(affectedGameIdCalculator.calculate(anyObject(PreparedAffectedGameIdInputs::class.java)))
             .thenReturn(emptySlice7CalculationResult())
         `when`(repository.loadCurrentGameProjectionRows()).thenReturn(
@@ -196,10 +195,10 @@ class ServiceEtlServiceTest {
         doAnswer {
             events += "calculator-prepare"
             preparedInputs
-        }.`when`(affectedGameIdCalculator).prepare(anyLong())
+        }.`when`(affectedGameIdCalculator).prepare()
         doAnswer {
             events += "service-sync-game-statuses"
-            ServiceEtlTableSyncResult(processedRows = 0, nextCursor = null)
+            ServiceEtlTableSyncResult(processedRows = 0)
         }.`when`(repository).syncGameStatuses(anyList())
         doAnswer {
             events += "calculator-calculate"
@@ -217,7 +216,7 @@ class ServiceEtlServiceTest {
 
         val order = inOrder(ingestRepository, affectedGameIdCalculator, repository)
         order.verify(ingestRepository).loadServiceGameStatuses()
-        order.verify(affectedGameIdCalculator).prepare(anyLong())
+        order.verify(affectedGameIdCalculator).prepare()
         order.verify(repository).syncGameStatuses(anyList())
         order.verify(affectedGameIdCalculator).calculate(anyObject(PreparedAffectedGameIdInputs::class.java))
     }
@@ -233,7 +232,7 @@ class ServiceEtlServiceTest {
             listOf(expectedGameRow),
             listOf(expectedGameRow),
         )
-        `when`(affectedGameIdCalculator.prepare(anyLong())).thenReturn(preparedInputs)
+        `when`(affectedGameIdCalculator.prepare()).thenReturn(preparedInputs)
         `when`(affectedGameIdCalculator.calculate(anyObject(PreparedAffectedGameIdInputs::class.java))).thenReturn(
             slice7CalculationResult(perTableGameIds = mapOf("game" to setOf(1L)))
         )
@@ -263,7 +262,7 @@ class ServiceEtlServiceTest {
         `when`(repository.loadCurrentGameProjectionRows()).thenReturn(
             listOf(preparedInputs.gameRows.single().copy(name = "wrong-name"))
         )
-        `when`(affectedGameIdCalculator.prepare(anyLong())).thenReturn(preparedInputs)
+        `when`(affectedGameIdCalculator.prepare()).thenReturn(preparedInputs)
         `when`(affectedGameIdCalculator.calculate(anyObject(PreparedAffectedGameIdInputs::class.java))).thenReturn(
             slice7CalculationResult(perTableGameIds = mapOf("game" to setOf(1L)))
         )
@@ -295,10 +294,9 @@ class ServiceEtlServiceTest {
     }
 
     private fun stubEmptySlice2Syncs() {
-        val emptyCursorResult = ServiceEtlTableSyncResult(processedRows = 0, nextCursor = null)
+        val emptyCursorResult = ServiceEtlTableSyncResult(processedRows = 0)
         val emptyPlatformLogoResult = ServiceEtlTableSyncResult(
             processedRows = 0,
-            nextCursor = null,
             note = "diff-based upsert: ingest.platform_logo has no updated_at cursor",
         )
 
@@ -428,12 +426,8 @@ class ServiceEtlServiceTest {
         val sourceResults = sourceTables.map { tableName ->
             AffectedGameIdSourceResult(
                 tableName = tableName,
-                cursorFrom = null,
-                cursorTo = null,
                 affectedGameIds = perTableGameIds[tableName].orEmpty(),
                 note = "slice7 projection diff test note",
-                materializedInCurrentSlice = true,
-                advanceCursor = false,
             )
         }
         val affectedGameIds = linkedSetOf<Long>()

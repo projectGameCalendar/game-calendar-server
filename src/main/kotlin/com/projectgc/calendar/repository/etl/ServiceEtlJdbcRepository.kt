@@ -3,7 +3,6 @@ package com.projectgc.calendar.repository.etl
 import com.projectgc.calendar.service.etl.ServiceEtlTrigger
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.jdbc.core.JdbcTemplate
-import org.springframework.jdbc.core.ResultSetExtractor
 import org.springframework.stereotype.Repository
 import java.sql.PreparedStatement
 import java.sql.ResultSet
@@ -58,29 +57,6 @@ class ServiceEtlJdbcRepository(
             mismatchCount,
             errorMessage,
             runId,
-        )
-    }
-
-    fun findCursor(tableName: String): Long? =
-        jdbc.query(
-            "SELECT last_synced_at FROM service.etl_cursor WHERE table_name = ?",
-            ResultSetExtractor { rs -> if (rs.next()) rs.getLong("last_synced_at") else null },
-            tableName,
-        )
-
-    fun upsertCursor(tableName: String, lastSyncedAt: Long, syncedAt: Instant) {
-        jdbc.update(
-            """
-            INSERT INTO service.etl_cursor
-                (table_name, last_synced_at, synced_at)
-            VALUES (?, ?, ?)
-            ON CONFLICT (table_name) DO UPDATE SET
-                last_synced_at = EXCLUDED.last_synced_at,
-                synced_at = EXCLUDED.synced_at
-            """.trimIndent(),
-            tableName,
-            lastSyncedAt,
-            Timestamp.from(syncedAt),
         )
     }
 
@@ -1192,7 +1168,6 @@ class ServiceEtlJdbcRepository(
     private fun diffResult(processedRows: Int, note: String = DIFF_NOTE) =
         ServiceEtlTableSyncResult(
             processedRows = processedRows,
-            nextCursor = null,
             note = note,
         )
 
@@ -1285,7 +1260,6 @@ data class ServiceEtlMismatchLogEntry(
 
 data class ServiceEtlTableSyncResult(
     val processedRows: Int,
-    val nextCursor: Long?,
     val note: String? = null,
 )
 

@@ -60,7 +60,7 @@ class AffectedGameIdCalculator(
             "slice6 affected game_id diff calculated from service.alternative_name projection"
     }
 
-    fun prepare(@Suppress("UNUSED_PARAMETER") syncStartedAt: Long): PreparedAffectedGameIdInputs {
+    fun prepare(): PreparedAffectedGameIdInputs {
         val allGameIds = ingestEtlReadJdbcRepository.findServiceCandidateGameIds().toSet()
         return PreparedAffectedGameIdInputs(
             allGameIds = allGameIds,
@@ -84,7 +84,7 @@ class AffectedGameIdCalculator(
         )
     }
 
-    fun calculate(syncStartedAt: Long): AffectedGameIdCalculationResult = calculate(prepare(syncStartedAt))
+    fun calculate(): AffectedGameIdCalculationResult = calculate(prepare())
 
     fun calculate(preparedInputs: PreparedAffectedGameIdInputs): AffectedGameIdCalculationResult {
         val allGameIds = preparedInputs.allGameIds
@@ -177,9 +177,7 @@ class AffectedGameIdCalculator(
         )
 
         val affectedGameIds = linkedSetOf<Long>()
-        sourceResults
-            .filter { it.materializedInCurrentSlice }
-            .forEach { affectedGameIds += it.affectedGameIds }
+        sourceResults.forEach { affectedGameIds += it.affectedGameIds }
 
         return AffectedGameIdCalculationResult(
             affectedGameIds = affectedGameIds,
@@ -193,12 +191,8 @@ class AffectedGameIdCalculator(
         affectedGameIds: Set<Long>,
     ) = AffectedGameIdSourceResult(
         tableName = tableName,
-        cursorFrom = null,
-        cursorTo = null,
         affectedGameIds = affectedGameIds,
         note = note,
-        materializedInCurrentSlice = true,
-        advanceCursor = false,
     )
 
     private fun findAffectedGameIdsFromGameProjectionDiff(preparedInputs: PreparedAffectedGameIdInputs): Set<Long> =
@@ -574,10 +568,6 @@ data class AffectedGameIdCalculationResult(
 
 data class AffectedGameIdSourceResult(
     val tableName: String,
-    val cursorFrom: Long?,
-    val cursorTo: Long?,
     val affectedGameIds: Set<Long>,
     val note: String,
-    val materializedInCurrentSlice: Boolean,
-    val advanceCursor: Boolean,
 )

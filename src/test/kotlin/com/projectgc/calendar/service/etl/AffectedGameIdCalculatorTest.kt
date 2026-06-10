@@ -12,14 +12,10 @@ import com.projectgc.calendar.repository.etl.IngestEtlReadJdbcRepository
 import com.projectgc.calendar.repository.etl.ServiceEtlJdbcRepository
 import com.projectgc.calendar.repository.etl.WebsiteProjectionRow
 import org.junit.jupiter.api.Test
-import org.mockito.Mockito.anyLong
 import org.mockito.Mockito.mock
-import org.mockito.Mockito.never
 import org.mockito.Mockito.verify
 import org.mockito.Mockito.`when`
 import kotlin.test.assertEquals
-import kotlin.test.assertFalse
-import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class AffectedGameIdCalculatorTest {
@@ -63,18 +59,14 @@ class AffectedGameIdCalculatorTest {
         `when`(serviceRepository.loadCurrentWebsiteProjectionRows()).thenReturn(emptyList())
         `when`(serviceRepository.loadCurrentAlternativeNameProjectionRows()).thenReturn(emptyList())
 
-        val result = calculator.calculate(500L)
+        val result = calculator.calculate()
         val resultsByTable = result.sourceResults.associateBy { it.tableName }
 
         assertEquals(allGameIds.toSet(), result.affectedGameIds)
         assertEquals(SLICE6_SOURCE_TABLES, result.sourceResults.map { it.tableName })
         SLICE6_SOURCE_TABLES.forEach { tableName ->
             val sourceResult = resultsByTable.getValue(tableName)
-            assertNull(sourceResult.cursorFrom)
-            assertNull(sourceResult.cursorTo)
             assertTrue(sourceResult.note.contains("slice6"))
-            assertTrue(sourceResult.materializedInCurrentSlice)
-            assertFalse(sourceResult.advanceCursor)
         }
         listOf(
             "game",
@@ -93,8 +85,6 @@ class AffectedGameIdCalculatorTest {
         }
 
         verify(ingestRepository).findServiceCandidateGameIds()
-        verify(serviceRepository, never()).findCursor(anyObject(String::class.java))
-        verify(ingestRepository, never()).findAffectedGameIdsFromGameUpdatedAt(anyLong())
     }
 
     @Test
@@ -141,7 +131,7 @@ class AffectedGameIdCalculatorTest {
             }
         }
 
-        val result = calculator.calculate(700L)
+        val result = calculator.calculate()
         val resultsByTable = result.sourceResults.associateBy { it.tableName }
 
         assertEquals(linkedSetOf(1L, 2L, 3L), result.affectedGameIds)
@@ -213,7 +203,7 @@ class AffectedGameIdCalculatorTest {
         `when`(serviceRepository.loadCurrentAlternativeNameProjectionRows()).thenReturn(emptyList())
         `when`(serviceRepository.loadIds(anyObject(String::class.java))).thenReturn(emptySet())
 
-        val result = calculator.calculate(700L)
+        val result = calculator.calculate()
         val releaseSourceResult = result.sourceResults.first { it.tableName == "release_date" }
 
         assertEquals(linkedSetOf(2L, 1L), releaseSourceResult.affectedGameIds)
