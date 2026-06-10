@@ -312,24 +312,13 @@ class GameReleaseBatchService(
         log.info("[company] involved_company 기반 동기화 시작 (companyIds=${companyIds.size}개, cursor=$cursor)")
         val stats = TableSyncStats(syncId, "company")
         companyIds.chunked(PAGE_SIZE).forEach { chunk ->
-            var lastId = 0L
-            var iterations = 0
-            while (true) {
-                if (++iterations > MAX_LOOP_GUARD) {
-                    throw LoopGuardExceededException(
-                        tableName = "company",
-                        guard = MAX_LOOP_GUARD,
-                        scope = "company keyset 순회",
-                    )
-                }
-                val result = igdbClient.fetchCompaniesByIds(chunk, cursor, lastId)
-                stats.fetched += result.fetched
-                stats.upserted += result.items.size
-                stats.parseErrors += result.errors
-                repos.jdbc.upsertCompanies(result.items.map { it.toEntity() })
-                val nextId = result.items.lastOrNull()?.id
-                if (result.fetched == PAGE_SIZE && nextId != null) lastId = nextId else break
-            }
+            // chunk 크기 ≤ PAGE_SIZE이고 id는 PK(ID당 최대 1행)라 결과가 한 페이지를 넘을 수 없음
+            // — 청크당 단일 호출로 충분 (keyset 순회 불필요)
+            val result = igdbClient.fetchCompaniesByIds(chunk, cursor)
+            stats.fetched += result.fetched
+            stats.upserted += result.items.size
+            stats.parseErrors += result.errors
+            repos.jdbc.upsertCompanies(result.items.map { it.toEntity() })
         }
         stats.finishedAt = Instant.now()
         updateCursor("company", syncStartedAt)

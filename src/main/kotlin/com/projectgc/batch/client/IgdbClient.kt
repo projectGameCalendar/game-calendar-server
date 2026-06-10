@@ -90,8 +90,8 @@ class IgdbClient(
     fun fetchInvolvedCompanies(updatedAfter: Long, lastId: Long): FetchResult<IgdbInvolvedCompanyDto> =
         postWithRetry("/involved_companies", buildGameScopedQuery(INVOLVED_COMPANY_FIELDS, updatedAfter, lastId))
 
-    fun fetchCompaniesByIds(companyIds: List<Long>, updatedAfter: Long, lastId: Long): FetchResult<IgdbCompanyDto> =
-        postWithRetry("/companies", buildIdScopedQuery(COMPANY_FIELDS, companyIds, updatedAfter, lastId))
+    fun fetchCompaniesByIds(companyIds: List<Long>, updatedAfter: Long): FetchResult<IgdbCompanyDto> =
+        postWithRetry("/companies", buildIdScopedQuery(COMPANY_FIELDS, companyIds, updatedAfter))
 
     fun fetchLanguageSupports(updatedAfter: Long, lastId: Long): FetchResult<IgdbLanguageSupportDto> =
         postWithRetry("/language_supports", buildGameScopedQuery(LANGUAGE_SUPPORT_FIELDS, updatedAfter, lastId))
@@ -220,9 +220,10 @@ class IgdbClient(
     }
 
     // company ID 목록 기반 조회 — involved_company에서 추출한 ID만 수집
-    private fun buildIdScopedQuery(fields: String, ids: List<Long>, updatedAfter: Long, lastId: Long): String {
+    // (ID 목록이 PAGE_SIZE 이하 청크로 들어오므로 keyset lastId 불필요 — 결과가 한 페이지를 넘지 않음)
+    private fun buildIdScopedQuery(fields: String, ids: List<Long>, updatedAfter: Long): String {
         val where = "id = (${ids.joinToString(",")})" + updatedAtCondition(updatedAfter)
-        return buildQuery(fields, where = where, lastId = lastId)
+        return buildQuery(fields, where = where)
     }
 
     private fun buildGameFilteredQuery(fields: String, gameIds: List<Long>, lastId: Long): String = buildString {
