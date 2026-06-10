@@ -153,12 +153,15 @@ class ServiceEtlServiceTest {
 
         stubSlice7ValidationPass(preparedInputs)
         `when`(affectedGameIdCalculator.prepare()).thenReturn(preparedInputs)
+        // findShared는 calculate가 로드한 스냅샷을 소비하므로 stale row를 calculate 결과에 담는다
+        // (validate 단계의 loadCurrentGameProjectionRows는 stubSlice7ValidationPass 스텁이 처리)
         `when`(affectedGameIdCalculator.calculate(anyObject(PreparedAffectedGameIdInputs::class.java)))
-            .thenReturn(emptySlice7CalculationResult())
-        `when`(repository.loadCurrentGameProjectionRows()).thenReturn(
-            listOf(staleGameRow),
-            preparedInputs.gameRows,
-        )
+            .thenReturn(
+                slice7CalculationResult(
+                    perTableGameIds = emptyMap(),
+                    currentRows = CurrentServiceProjectionRows(gameRows = listOf(staleGameRow)),
+                )
+            )
         doAnswer { invocation ->
             rebuiltGameRows += invocation.arguments[0] as List<GameProjectionRow>
             null
@@ -226,10 +229,10 @@ class ServiceEtlServiceTest {
         val preparedInputs = preparedAffectedGameInputs(linkedSetOf(1L))
         val expectedGameRow = preparedInputs.gameRows.single()
         stubSlice7ValidationPass(preparedInputs)
+        // findShared는 calculate 스냅샷을 소비하므로 loadCurrentGameProjectionRows는 attempt당
+        // 검증(validate) 단계에서만 1회 호출된다: 1차 mismatch → 재시도 → 2차 통과
         `when`(repository.loadCurrentGameProjectionRows()).thenReturn(
-            listOf(expectedGameRow),
             listOf(expectedGameRow.copy(name = "wrong-name")),
-            listOf(expectedGameRow),
             listOf(expectedGameRow),
         )
         `when`(affectedGameIdCalculator.prepare()).thenReturn(preparedInputs)
@@ -409,7 +412,10 @@ class ServiceEtlServiceTest {
     private fun emptySlice7CalculationResult(): AffectedGameIdCalculationResult =
         slice7CalculationResult(emptyMap())
 
-    private fun slice7CalculationResult(perTableGameIds: Map<String, Set<Long>>): AffectedGameIdCalculationResult {
+    private fun slice7CalculationResult(
+        perTableGameIds: Map<String, Set<Long>>,
+        currentRows: CurrentServiceProjectionRows = CurrentServiceProjectionRows(),
+    ): AffectedGameIdCalculationResult {
         val sourceTables = listOf(
             "game",
             "release_date",
@@ -435,6 +441,7 @@ class ServiceEtlServiceTest {
         return AffectedGameIdCalculationResult(
             affectedGameIds = affectedGameIds,
             sourceResults = sourceResults,
+            currentRows = currentRows,
         )
     }
 

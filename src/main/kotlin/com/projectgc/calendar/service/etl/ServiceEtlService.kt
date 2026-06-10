@@ -205,6 +205,7 @@ class ServiceEtlService(
         val dimensionDeletionAffectedGameIds = findSharedDimensionDeletionAffectedGameIds(
             preparedSlice2Inputs = preparedSlice2Inputs,
             sourceGameIds = preparedAffectedGameInputs.allGameIds,
+            currentRows = calculationResult.currentRows,
         )
         val affectedGameCount = rebuildAffectedGameProjections(
             runId = runId,
@@ -269,14 +270,16 @@ class ServiceEtlService(
         serviceEtlJdbcRepository.deleteIds(tableName, idsToDelete)
     }
 
+    // currentRows: calculate가 같은 트랜잭션에서 로드한 스냅샷 — 사이에 게임 프로젝션 쓰기가 없어 재로드 불필요
     private fun findSharedDimensionDeletionAffectedGameIds(
         preparedSlice2Inputs: PreparedSlice2Inputs,
         sourceGameIds: Set<Long>,
+        currentRows: CurrentServiceProjectionRows,
     ): Set<Long> {
         val idSets = preparedSlice2Inputs.idSets()
         val affectedGameIds = linkedSetOf<Long>()
 
-        serviceEtlJdbcRepository.loadCurrentGameProjectionRows().forEach { row ->
+        currentRows.gameRows.forEach { row ->
             if (
                 (row.statusId != null && row.statusId !in idSets.gameStatusIds) ||
                 (row.typeId != null && row.typeId !in idSets.gameTypeIds)
@@ -284,12 +287,12 @@ class ServiceEtlService(
                 affectedGameIds += row.id
             }
         }
-        serviceEtlJdbcRepository.loadCurrentGameLocalizationProjectionRows().forEach { row ->
+        currentRows.gameLocalizationRows.forEach { row ->
             if (row.regionId != null && row.regionId !in idSets.regionIds) {
                 affectedGameIds += row.gameId
             }
         }
-        serviceEtlJdbcRepository.loadCurrentGameReleaseProjectionRows().forEach { row ->
+        currentRows.gameReleaseRows.forEach { row ->
             if (
                 (row.platformId != null && row.platformId !in idSets.platformIds) ||
                 (row.regionId != null && row.regionId !in idSets.releaseRegionIds) ||
@@ -298,45 +301,42 @@ class ServiceEtlService(
                 affectedGameIds += row.gameId
             }
         }
-        serviceEtlJdbcRepository.loadCurrentGameLanguageProjectionRows().forEach { row ->
+        currentRows.gameLanguageRows.forEach { row ->
             if (row.languageId !in idSets.languageIds) {
                 affectedGameIds += row.gameId
             }
         }
         collectDimensionDeletionAffectedGameIds(
-            rows = serviceEtlJdbcRepository.loadCurrentGameDimensionProjectionRows("game_genre", "genre_id"),
+            rows = currentRows.gameGenreRows,
             availableDimensionIds = idSets.genreIds,
             affectedGameIds = affectedGameIds,
         )
         collectDimensionDeletionAffectedGameIds(
-            rows = serviceEtlJdbcRepository.loadCurrentGameDimensionProjectionRows("game_theme", "theme_id"),
+            rows = currentRows.gameThemeRows,
             availableDimensionIds = idSets.themeIds,
             affectedGameIds = affectedGameIds,
         )
         collectDimensionDeletionAffectedGameIds(
-            rows = serviceEtlJdbcRepository.loadCurrentGameDimensionProjectionRows(
-                "game_player_perspective",
-                "player_perspective_id",
-            ),
+            rows = currentRows.gamePlayerPerspectiveRows,
             availableDimensionIds = idSets.playerPerspectiveIds,
             affectedGameIds = affectedGameIds,
         )
         collectDimensionDeletionAffectedGameIds(
-            rows = serviceEtlJdbcRepository.loadCurrentGameDimensionProjectionRows("game_game_mode", "game_mode_id"),
+            rows = currentRows.gameModeRows,
             availableDimensionIds = idSets.gameModeIds,
             affectedGameIds = affectedGameIds,
         )
         collectDimensionDeletionAffectedGameIds(
-            rows = serviceEtlJdbcRepository.loadCurrentGameDimensionProjectionRows("game_keyword", "keyword_id"),
+            rows = currentRows.gameKeywordRows,
             availableDimensionIds = idSets.keywordIds,
             affectedGameIds = affectedGameIds,
         )
-        serviceEtlJdbcRepository.loadCurrentGameCompanyProjectionRows().forEach { row ->
+        currentRows.gameCompanyRows.forEach { row ->
             if (row.companyId !in idSets.companyIds) {
                 affectedGameIds += row.gameId
             }
         }
-        serviceEtlJdbcRepository.loadCurrentWebsiteProjectionRows().forEach { row ->
+        currentRows.websiteRows.forEach { row ->
             if (row.typeId != null && row.typeId !in idSets.websiteTypeIds) {
                 affectedGameIds += row.gameId
             }
