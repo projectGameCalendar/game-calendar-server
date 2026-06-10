@@ -19,4 +19,13 @@ class BatchConfiguration {
         setThreadNamePrefix("batch-")
         initialize()
     }
+
+    @Bean("serviceEtlTaskExecutor")
+    fun serviceEtlTaskExecutor() = ThreadPoolTaskExecutor().apply {
+        corePoolSize = 1
+        maxPoolSize = 1
+        queueCapacity = 0   // 큐 없음 — ETL 동시 실행은 ServiceEtlCoordinator가 거부하므로 적체 불가
+        setThreadNamePrefix("service-etl-")
+        initialize()
+    }
 }

@@ -1,7 +1,5 @@
-package com.projectgc.orchestration.service
+package com.projectgc.batch.service.etl
 
-import com.projectgc.calendar.service.etl.ServiceEtlRunner
-import com.projectgc.calendar.service.etl.ServiceEtlTrigger
 import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.core.task.TaskExecutor
@@ -15,11 +13,11 @@ class ServiceEtlCoordinator(
     private val serviceEtlRunner: ServiceEtlRunner,
     @Qualifier("serviceEtlTaskExecutor")
     private val serviceEtlTaskExecutor: TaskExecutor,
-) : ServiceEtlTriggerPort {
+) {
     private val log = LoggerFactory.getLogger(javaClass)
     private val running = AtomicBoolean(false)
 
-    override fun triggerAsync(trigger: ServiceEtlTrigger): UUID {
+    fun triggerAsync(trigger: ServiceEtlTrigger): UUID {
         if (!running.compareAndSet(false, true)) {
             throw TaskRejectedException("service ETL is already running")
         }

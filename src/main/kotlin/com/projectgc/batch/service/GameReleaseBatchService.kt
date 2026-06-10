@@ -6,9 +6,10 @@ import com.projectgc.batch.client.IgdbClient.Companion.PAGE_SIZE
 import com.projectgc.batch.model.entity.ingest.IngestSyncCursorEntity
 import com.projectgc.batch.model.mapper.*
 import com.projectgc.batch.repository.ingest.IngestRepositories
-import com.projectgc.shared.event.IngestSyncSucceededEvent
+import com.projectgc.batch.service.etl.ServiceEtlCoordinator
+import com.projectgc.batch.service.etl.ServiceEtlTrigger
 import org.slf4j.LoggerFactory
-import org.springframework.context.ApplicationEventPublisher
+import org.springframework.core.task.TaskRejectedException
 import org.springframework.data.domain.PageRequest
 import org.springframework.scheduling.annotation.Async
 import org.springframework.stereotype.Service
@@ -21,7 +22,7 @@ class GameReleaseBatchService(
     private val igdbClient: IgdbClient,
     private val mediaSync: MediaSyncService,
     private val repos: IngestRepositories,
-    private val eventPublisher: ApplicationEventPublisher,
+    private val serviceEtlCoordinator: ServiceEtlCoordinator,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -52,7 +53,7 @@ class GameReleaseBatchService(
         val startTime = Instant.now()
         val syncId = UUID.randomUUID()
         var syncLogInserted = false
-        var successEvent: IngestSyncSucceededEvent? = null
+        var ingestSucceeded = false
         log.info("IGDB 전체 동기화 시작 (syncId=$syncId)")
 
         try {
@@ -175,9 +176,8 @@ class GameReleaseBatchService(
                 throw PartialIngestSyncFailureException(failedTables.toList())
             }
 
-            val finishedAt = Instant.now()
-            repos.jdbc.finishSyncLog(syncId, finishedAt, "completed")
-            successEvent = IngestSyncSucceededEvent(syncId = syncId, completedAt = finishedAt)
+            repos.jdbc.finishSyncLog(syncId, Instant.now(), "completed")
+            ingestSucceeded = true
         } catch (ex: Exception) {
             when (ex) {
                 is PartialIngestSyncFailureException -> log.warn(ex.message)
@@ -192,10 +192,27 @@ class GameReleaseBatchService(
             }
         }
 
-        successEvent?.let(eventPublisher::publishEvent)
+        // completed 기록까지 확정된 경우에만 service ETL 후속 실행 — ETL 실패/거부는 ingest 결과에 영향 없음
+        if (ingestSucceeded) {
+            triggerServiceEtl(syncId)
+        }
 
         // [J] Duration.between으로 소요 시간 계산
         log.info("IGDB 전체 동기화 완료 (syncId=$syncId, 소요: ${Duration.between(startTime, Instant.now()).toSeconds()}초)")
+    }
+
+    private fun triggerServiceEtl(syncId: UUID) {
+        runCatching {
+            val runId = serviceEtlCoordinator.triggerAsync(ServiceEtlTrigger.afterIngest(syncId))
+            log.info("ingest 완료 후 service ETL 자동 실행 요청 수락 (ingestSyncId=$syncId, serviceRunId=$runId)")
+        }.onFailure { ex ->
+            when (ex) {
+                is TaskRejectedException ->
+                    log.warn("service ETL 자동 실행 스킵 - 이미 실행 중입니다. (ingestSyncId=$syncId)")
+                else ->
+                    log.error("service ETL 자동 실행 요청 실패 (ingestSyncId=$syncId): ${ex.message}", ex)
+            }
+        }
     }
 
     private fun captureTableFailure(

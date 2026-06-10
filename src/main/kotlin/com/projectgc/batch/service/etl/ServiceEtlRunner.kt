@@ -1,4 +1,4 @@
-package com.projectgc.calendar.service.etl
+package com.projectgc.batch.service.etl
 
 import java.util.UUID
 

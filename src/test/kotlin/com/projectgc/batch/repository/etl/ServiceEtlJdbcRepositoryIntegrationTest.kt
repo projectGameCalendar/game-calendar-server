@@ -1,6 +1,6 @@
-package com.projectgc.calendar.repository.etl
+package com.projectgc.batch.repository.etl
 
-import com.projectgc.calendar.service.etl.AffectedGameIdCalculator
+import com.projectgc.batch.service.etl.AffectedGameIdCalculator
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Test

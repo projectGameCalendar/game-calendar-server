@@ -1,4 +1,4 @@
-package com.projectgc.calendar.repository.etl
+package com.projectgc.batch.repository.etl
 
 internal object ServiceEtlDataScope {
     const val GLOBAL_RELEASE_REGION_ID = 8L

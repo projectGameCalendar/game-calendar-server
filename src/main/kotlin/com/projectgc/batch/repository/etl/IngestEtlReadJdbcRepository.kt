@@ -1,4 +1,4 @@
-package com.projectgc.calendar.repository.etl
+package com.projectgc.batch.repository.etl
 
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.jdbc.core.JdbcTemplate

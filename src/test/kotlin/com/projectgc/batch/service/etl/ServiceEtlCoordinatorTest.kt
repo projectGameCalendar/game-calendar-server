@@ -1,7 +1,5 @@
-package com.projectgc.orchestration.service
+package com.projectgc.batch.service.etl
 
-import com.projectgc.calendar.service.etl.ServiceEtlRunner
-import com.projectgc.calendar.service.etl.ServiceEtlTrigger
 import org.junit.jupiter.api.Test
 import org.springframework.core.task.SyncTaskExecutor
 import org.springframework.core.task.TaskRejectedException

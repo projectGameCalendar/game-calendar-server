@@ -1,6 +1,6 @@
-package com.projectgc.calendar.repository.etl
+package com.projectgc.batch.repository.etl
 
-import com.projectgc.calendar.service.etl.ServiceEtlTrigger
+import com.projectgc.batch.service.etl.ServiceEtlTrigger
 import org.springframework.beans.factory.annotation.Qualifier
 import org.springframework.jdbc.core.JdbcTemplate
 import org.springframework.stereotype.Repository

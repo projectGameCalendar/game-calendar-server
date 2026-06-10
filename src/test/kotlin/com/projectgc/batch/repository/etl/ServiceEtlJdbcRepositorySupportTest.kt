@@ -1,4 +1,4 @@
-package com.projectgc.calendar.repository.etl
+package com.projectgc.batch.repository.etl
 
 import org.junit.jupiter.api.Test
 import kotlin.test.assertEquals
