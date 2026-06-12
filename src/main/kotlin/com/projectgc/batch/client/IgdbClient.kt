@@ -22,6 +22,9 @@ class IgdbClient(
     private val log = LoggerFactory.getLogger(javaClass)
     private val restClient = restClientBuilder.build()
 
+    private val rateLimitLock = Any()
+    private var nextRequestAllowedAtMs = 0L
+
     companion object {
         private const val RATE_LIMIT_DELAY_MS = 300L
         private const val MAX_RETRY_ATTEMPTS = 3
@@ -87,8 +90,8 @@ class IgdbClient(
     fun fetchInvolvedCompanies(updatedAfter: Long, lastId: Long): FetchResult<IgdbInvolvedCompanyDto> =
         postWithRetry("/involved_companies", buildGameScopedQuery(INVOLVED_COMPANY_FIELDS, updatedAfter, lastId))
 
-    fun fetchCompaniesByIds(companyIds: List<Long>, updatedAfter: Long, lastId: Long): FetchResult<IgdbCompanyDto> =
-        postWithRetry("/companies", buildIdScopedQuery(COMPANY_FIELDS, companyIds, updatedAfter, lastId))
+    fun fetchCompaniesByIds(companyIds: List<Long>, updatedAfter: Long): FetchResult<IgdbCompanyDto> =
+        postWithRetry("/companies", buildIdScopedQuery(COMPANY_FIELDS, companyIds, updatedAfter))
 
     fun fetchLanguageSupports(updatedAfter: Long, lastId: Long): FetchResult<IgdbLanguageSupportDto> =
         postWithRetry("/language_supports", buildGameScopedQuery(LANGUAGE_SUPPORT_FIELDS, updatedAfter, lastId))
@@ -217,9 +220,10 @@ class IgdbClient(
     }
 
     // company ID 목록 기반 조회 — involved_company에서 추출한 ID만 수집
-    private fun buildIdScopedQuery(fields: String, ids: List<Long>, updatedAfter: Long, lastId: Long): String {
+    // (ID 목록이 PAGE_SIZE 이하 청크로 들어오므로 keyset lastId 불필요 — 결과가 한 페이지를 넘지 않음)
+    private fun buildIdScopedQuery(fields: String, ids: List<Long>, updatedAfter: Long): String {
         val where = "id = (${ids.joinToString(",")})" + updatedAtCondition(updatedAfter)
-        return buildQuery(fields, where = where, lastId = lastId)
+        return buildQuery(fields, where = where)
     }
 
     private fun buildGameFilteredQuery(fields: String, gameIds: List<Long>, lastId: Long): String = buildString {
@@ -241,6 +245,19 @@ class IgdbClient(
         return postWithRetryInternal(endpoint, body, typeRef)
     }
 
+    // Rate limit: 직전 요청 시각 기준 최소 간격(RATE_LIMIT_DELAY_MS)의 부족분만 대기
+    // 고정 sleep과 달리 응답 파싱·DB upsert 등 페이지 처리 시간이 간격을 이미 채웠으면 대기 없음
+    // (다음 허용 시각을 lock 안에서 선점하므로 동시 호출에도 간격 보장)
+    private fun awaitRateLimitWindow() {
+        val waitMs = synchronized(rateLimitLock) {
+            val now = System.currentTimeMillis()
+            val wait = (nextRequestAllowedAtMs - now).coerceAtLeast(0L)
+            nextRequestAllowedAtMs = now + wait + RATE_LIMIT_DELAY_MS
+            wait
+        }
+        if (waitMs > 0) Thread.sleep(waitMs)
+    }
+
     // 재시도 + 지수적 백오프 (non-inline — 바이트코드 중복 없음)
     // - ResourceAccessException (Connection reset 등): 재시도
     // - 5xx: 재시도
@@ -253,7 +270,7 @@ class IgdbClient(
         typeRef: ParameterizedTypeReference<List<T>>,
     ): FetchResult<T> {
         // 논리적 API 호출당 1회 적용 — 재시도는 별도 백오프로 충분하므로 추가 delay 불필요
-        Thread.sleep(RATE_LIMIT_DELAY_MS)
+        awaitRateLimitWindow()
         var lastException: Exception? = null
 
         repeat(MAX_RETRY_ATTEMPTS) { attempt ->

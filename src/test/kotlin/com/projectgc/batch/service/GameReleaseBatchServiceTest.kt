@@ -8,7 +8,9 @@ import com.projectgc.batch.repository.ingest.IngestInvolvedCompanyRepository
 import com.projectgc.batch.repository.ingest.IngestJdbcRepository
 import com.projectgc.batch.repository.ingest.IngestRepositories
 import com.projectgc.batch.repository.ingest.IngestSyncCursorRepository
-import com.projectgc.shared.event.IngestSyncSucceededEvent
+import com.projectgc.batch.service.etl.ServiceEtlCoordinator
+import com.projectgc.batch.service.etl.ServiceEtlTrigger
+import com.projectgc.batch.service.etl.ServiceEtlTriggerType
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.mockito.Mockito.doAnswer
@@ -17,14 +19,13 @@ import org.mockito.Mockito.mock
 import org.mockito.Mockito.never
 import org.mockito.Mockito.verify
 import org.mockito.Mockito.`when`
-import org.springframework.context.ApplicationEventPublisher
+import org.springframework.core.task.TaskRejectedException
 import org.springframework.data.domain.Pageable
 import org.springframework.data.domain.SliceImpl
 import java.time.Instant
 import java.util.Optional
 import java.util.UUID
 import java.util.concurrent.atomic.AtomicInteger
-import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class GameReleaseBatchServiceTest {
@@ -35,14 +36,14 @@ class GameReleaseBatchServiceTest {
     private val syncCursorRepository = mock(IngestSyncCursorRepository::class.java)
     private val gameRepository = mock(IngestGameRepository::class.java)
     private val involvedCompanyRepository = mock(IngestInvolvedCompanyRepository::class.java)
-    private val eventPublisher = RecordingEventPublisher()
+    private val serviceEtlCoordinator = mock(ServiceEtlCoordinator::class.java)
     private val savedCursors = mutableListOf<IngestSyncCursorEntity>()
 
     private val service = GameReleaseBatchService(
         igdbClient = igdbClient,
         mediaSync = mediaSyncService,
         repos = repos,
-        eventPublisher = eventPublisher,
+        serviceEtlCoordinator = serviceEtlCoordinator,
     )
 
     @BeforeEach
@@ -61,58 +62,69 @@ class GameReleaseBatchServiceTest {
         `when`(gameRepository.findAllIdsAfter(org.mockito.ArgumentMatchers.anyLong(), anyObject(Pageable::class.java)))
             .thenReturn(SliceImpl(emptyList()))
         `when`(involvedCompanyRepository.findAllDistinctCompanyIds()).thenReturn(emptyList())
+        `when`(serviceEtlCoordinator.triggerAsync(anyObject(ServiceEtlTrigger::class.java)))
+            .thenReturn(UUID.randomUUID())
 
         stubSuccessfulFetches()
     }
 
     @Test
-    fun `publishes shared ingest success event only after authoritative success`() {
+    fun `triggers service etl only after authoritative success`() {
         service.syncAll()
 
-        assertEquals(1, eventPublisher.events.size)
-        val event = eventPublisher.events.single() as IngestSyncSucceededEvent
-        assertTrue(event.completedAt <= Instant.now())
+        verify(serviceEtlCoordinator).triggerAsync(triggerOfType(ServiceEtlTriggerType.INGEST_SYNC_COMPLETED))
 
         verify(jdbc).finishSyncLog(anyObject(UUID::class.java), anyObject(Instant::class.java), eqValue("completed"))
         verify(jdbc, never()).finishSyncLog(anyObject(UUID::class.java), anyObject(Instant::class.java), eqValue("failed"))
     }
 
     @Test
-    fun `does not publish downstream when a source step partially fails`() {
+    fun `completes sync normally even when service etl trigger is rejected`() {
+        `when`(serviceEtlCoordinator.triggerAsync(anyObject(ServiceEtlTrigger::class.java)))
+            .thenThrow(TaskRejectedException("service ETL is already running"))
+
+        service.syncAll()
+
+        verify(jdbc).finishSyncLog(anyObject(UUID::class.java), anyObject(Instant::class.java), eqValue("completed"))
+        verify(jdbc, never()).finishSyncLog(anyObject(UUID::class.java), anyObject(Instant::class.java), eqValue("failed"))
+    }
+
+    @Test
+    fun `does not trigger service etl when a source step partially fails`() {
         `when`(igdbClient.fetchGenres()).thenThrow(RuntimeException("genre fetch failed"))
 
         service.syncAll()
 
-        assertTrue(eventPublisher.events.isEmpty())
+        verify(serviceEtlCoordinator, never()).triggerAsync(anyObject(ServiceEtlTrigger::class.java))
         verify(jdbc, never()).finishSyncLog(anyObject(UUID::class.java), anyObject(Instant::class.java), eqValue("completed"))
         verify(jdbc).finishSyncLog(anyObject(UUID::class.java), anyObject(Instant::class.java), eqValue("failed"))
     }
 
     @Test
-    fun `does not publish downstream when sync setup fails before completion`() {
+    fun `does not trigger service etl when sync setup fails before completion`() {
         doThrow(RuntimeException("sync log insert failed"))
             .`when`(jdbc).insertSyncLog(anyObject(UUID::class.java), anyObject(Instant::class.java))
 
         service.syncAll()
 
-        assertTrue(eventPublisher.events.isEmpty())
+        verify(serviceEtlCoordinator, never()).triggerAsync(anyObject(ServiceEtlTrigger::class.java))
         verify(jdbc, never()).finishSyncLog(anyObject(UUID::class.java), anyObject(Instant::class.java), eqValue("completed"))
         verify(jdbc, never()).finishSyncLog(anyObject(UUID::class.java), anyObject(Instant::class.java), eqValue("failed"))
     }
 
     @Test
-    fun `does not publish downstream when completed finish log write fails`() {
+    fun `does not trigger service etl when completed finish log write fails`() {
         doThrow(RuntimeException("completed log write failed"))
             .`when`(jdbc).finishSyncLog(anyObject(UUID::class.java), anyObject(Instant::class.java), eqValue("completed"))
 
         service.syncAll()
 
-        assertTrue(eventPublisher.events.isEmpty())
+        verify(serviceEtlCoordinator, never()).triggerAsync(anyObject(ServiceEtlTrigger::class.java))
         verify(jdbc).finishSyncLog(anyObject(UUID::class.java), anyObject(Instant::class.java), eqValue("failed"))
     }
 
     @Test
-    fun `does not publish downstream and does not advance cursor when loop guard is exceeded`() {
+    fun `does not trigger service etl and does not advance cursor when loop guard is exceeded`() {
         val loopingSlice = SliceImpl(listOf(1L), Pageable.ofSize(1), true)
         val emptySlice = SliceImpl<Long>(emptyList())
         val calls = AtomicInteger(0)
@@ -123,7 +135,7 @@ class GameReleaseBatchServiceTest {
 
         service.syncAll()
 
-        assertTrue(eventPublisher.events.isEmpty())
+        verify(serviceEtlCoordinator, never()).triggerAsync(anyObject(ServiceEtlTrigger::class.java))
         assertTrue(savedCursors.none { it.tableName == "cover" })
         verify(jdbc, never()).finishSyncLog(anyObject(UUID::class.java), anyObject(Instant::class.java), eqValue("completed"))
         verify(jdbc).finishSyncLog(anyObject(UUID::class.java), anyObject(Instant::class.java), eqValue("failed"))
@@ -169,11 +181,10 @@ class GameReleaseBatchServiceTest {
         return value
     }
 
-    private class RecordingEventPublisher : ApplicationEventPublisher {
-        val events = mutableListOf<Any>()
-
-        override fun publishEvent(event: Any) {
-            events += event
-        }
+    // matcher 등록 후 non-null 더미 반환 — ArgumentCaptor.capture()의 null 반환이
+    // Kotlin non-null 파라미터 체크에 걸리는 문제 회피 (anyObject/eqValue와 동일 관용구)
+    private fun triggerOfType(type: ServiceEtlTriggerType): ServiceEtlTrigger {
+        org.mockito.ArgumentMatchers.argThat<ServiceEtlTrigger> { it.type == type }
+        return ServiceEtlTrigger.manual()
     }
 }
